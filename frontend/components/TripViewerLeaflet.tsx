@@ -1,0 +1,441 @@
+"use client";
+
+import React, { useEffect, useRef, useCallback, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { EditStepModal } from "./EditStepModal";
+import LocationSearch from "./LocationSearch";
+import RecommendationsPanel from "./RecommendationsPanel";
+import { api } from "@/lib/api";
+
+type Step = {
+  id: string;
+  lat: number;
+  lng: number;
+  timestamp: string;
+  note?: string;
+  image_url?: string;
+  duration_days?: number;
+  location_name?: string;
+};
+
+type TripViewerLeafletProps = {
+  steps: Step[];
+  onMapClick: (coords: { lat: number; lng: number }) => void;
+  onStepsChange?: (updatedSteps: Step[]) => void;
+  tripId: string;
+  token: string;
+};
+
+// Reverse geocode coordinates to location name
+async function getLocationName(lat: number, lng: number): Promise<string> {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await response.json();
+    
+    // Extract city, town, or location name
+    if (data.address) {
+      const { city, town, village, county, state, country } = data.address;
+      return `${city || town || village || county || 'Location'}, ${state || country || ''}`.replace(/,\s*$/, '');
+    }
+    return ''; // Return empty string on fallback, no coordinates
+  } catch (error) {
+    console.log("Geocoding failed");
+    return ''; // Return empty string on failure, no coordinates
+  }
+}
+
+function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token }: TripViewerLeafletProps) {
+  const mapRef = useRef<L.Map | null>(null);
+  const layersRef = useRef<(L.Marker | L.Polyline)[]>([]);
+  const containerId = "leaflet-map-container";
+  const [selectedStep, setSelectedStep] = useState<Step | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<{
+    name: string;
+    lat: number;
+    lon: number;
+  } | null>(null);
+  const [showRecommendations, setShowRecommendations] = useState(false);
+
+  // Memoize the click handler
+  const memoizedOnMapClick = useCallback(
+    (coords: { lat: number; lng: number }) => {
+      onMapClick(coords);
+    },
+    [onMapClick]
+  );
+
+  // Handle edit step
+  const handleEditStep = async (updates: any) => {
+    if (!selectedStep) return;
+    setEditLoading(true);
+    try {
+      await api.updateStep(token, selectedStep.id, updates);
+      
+      // Update local state
+      const updatedSteps = steps.map(s => 
+        s.id === selectedStep.id ? { ...s, ...updates } : s
+      );
+      onStepsChange?.(updatedSteps);
+      setShowEditModal(false);
+      setSelectedStep(null);
+    } catch (err) {
+      console.error("Failed to update step:", err);
+      throw err;
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // Handle delete step
+  const handleDeleteStep = async (stepId: string) => {
+    if (!confirm("Are you sure you want to delete this location?")) return;
+    
+    try {
+      await api.deleteStep(token, stepId);
+      
+      // Update local state
+      const updatedSteps = steps.filter(s => s.id !== stepId);
+      onStepsChange?.(updatedSteps);
+      setSelectedStep(null);
+    } catch (err) {
+      console.error("Failed to delete step:", err);
+      alert("Failed to delete location");
+    }
+  };
+
+  // Handle location search result
+  const handleLocationSelected = (location: {
+    name: string;
+    lat: number;
+    lon: number;
+  }) => {
+    setSelectedLocation(location);
+    setShowRecommendations(true);
+    
+    // Center map on selected location
+    if (mapRef.current) {
+      mapRef.current.setView([location.lat, location.lon], 13, { animate: true });
+    }
+  };
+
+  // Initialize map only once (mount)
+  useEffect(() => {
+    if (mapRef.current || typeof window === "undefined") return;
+
+    const container = document.getElementById(containerId);
+    if (!container) {
+      console.warn(`Map container ${containerId} not found`);
+      return;
+    }
+
+    // Determine initial map center and zoom level
+    let initialCenter: [number, number] = [20, 0];
+    let initialZoom = 4;
+
+    if (steps && steps.length > 0) {
+      // If there are steps, center on the last (most recent) location
+      const lastStep = steps[steps.length - 1];
+      initialCenter = [lastStep.lat, lastStep.lng];
+      initialZoom = 13; // Good zoom level for city/area view
+    }
+
+    const map = L.map(containerId).setView(initialCenter, initialZoom);
+
+    // Try multiple tile providers for better reliability
+    const tileLayer = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png?lang=en",
+      {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        minZoom: 1,
+      }
+    );
+
+    tileLayer.addTo(map);
+    console.log("✅ Tile layer added to map");
+
+    mapRef.current = map;
+
+    // Add click handler
+    map.on("click", (e) => {
+      memoizedOnMapClick({ lat: e.latlng.lat, lng: e.latlng.lng });
+    });
+
+    console.log("✅ Map initialized");
+
+    return () => {
+      // Cleanup on unmount
+      if (mapRef.current) {
+        mapRef.current.off();
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [memoizedOnMapClick]);
+
+  // Update markers when steps change
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Remove existing layers
+    layersRef.current.forEach((layer) => {
+      if (mapRef.current) {
+        mapRef.current.removeLayer(layer);
+      }
+    });
+    layersRef.current = [];
+
+    if (steps.length === 0) return;
+
+    // Fetch all geocoded location names (regardless of custom names)
+    Promise.all(
+      steps.map((step) => 
+        getLocationName(step.lat, step.lng)
+      )
+    ).then((geocodedNames) => {
+      // Ensure map still exists before adding layers
+      if (!mapRef.current) return;
+      
+      // Add markers for each step with location names
+      steps.forEach((step, index) => {
+        const geocodedLocationName = geocodedNames[index];
+        
+        // Determine marker color
+        let color = "#007AFF"; // Default blue
+        if (index === 0) {
+          color = "#34C759"; // Green for first
+        } else if (index === steps.length - 1) {
+          color = "#FF3B30"; // Red for last
+        }
+
+        // Create SVG icon for marker
+        const svgIcon = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='${encodeURIComponent(color)}' stroke='white' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6' fill='white'/%3E%3C/svg%3E`;
+
+        // Format date nicely
+        const date = new Date(step.timestamp);
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        
+        // Create enhanced popup content
+        const isStart = index === 0;
+        const isEnd = index === steps.length - 1;
+        
+        let popupContent = `
+          <div style="font-family: -apple-system, sans-serif; padding: 12px; min-width: 280px; border-radius: 8px; background: #FFFFFF;">
+            <div style="font-weight: 700; color: #1D1D1D; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+              <span>📍</span>
+              <span>${step.location_name || "Place " + (index + 1)}</span>
+        `;
+        
+        if (isStart) {
+          popupContent += `<span style="display: inline-block; background: #34C759; color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-left: auto;">START</span>`;
+        } else if (isEnd) {
+          popupContent += `<span style="display: inline-block; background: #FF3B30; color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-left: auto;">END</span>`;
+        }
+        
+        popupContent += `
+            </div>
+          <div style="color: #666; font-size: 12px; line-height: 1.8; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span>📅</span>
+              <span>${dateStr}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span>🕐</span>
+              <span>${timeStr}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span>📍</span>
+              <span>Stop ${index + 1} of ${steps.length}</span>
+            </div>
+      `;
+      
+      if (step.duration_days && step.duration_days > 0) {
+        popupContent += `
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span>📌</span>
+              <span>${step.duration_days} day${step.duration_days !== 1 ? 's' : ''}</span>
+            </div>
+        `;
+      }
+      
+      popupContent += `
+            <div style="font-size: 11px; color: #666; grid-column: 1 / -1; padding: 6px 0; border-top: 1px solid #E5E5EA; margin-top: 4px; padding-top: 8px;">
+              ${step.note ? `<div style="margin-bottom: 8px; padding: 8px; background: #F5F5F7; border-left: 3px solid #667eea; border-radius: 4px;"><strong>Memory:</strong> ${step.note.substring(0, 100)}${step.note.length > 100 ? '...' : ''}</div>` : ''}
+              ${geocodedLocationName ? `<div style="display: flex; align-items: center; gap: 4px;">
+                <span>🗺️</span>
+                <span style="font-weight: 500;">${geocodedLocationName}</span>
+              </div>` : ''}
+            </div>
+      `;
+      
+      if (step.image_url) {
+        popupContent += `
+          <div style="margin-top: 8px; border-radius: 4px; overflow: hidden; max-height: 120px;">
+            <img src="${step.image_url}" alt="Memory" style="width: 100%; height: auto; max-height: 120px; object-fit: cover;" />
+          </div>
+        `;
+      }
+      
+      // Add edit/delete buttons
+      popupContent += `
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E5EA; display: flex; gap: 8px;">
+              <button class="edit-step-btn" data-step-id="${step.id}" style="flex: 1; padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;">Edit</button>
+              <button class="delete-step-btn" data-step-id="${step.id}" style="flex: 1; padding: 8px 12px; background: #FF3B30; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;">Delete</button>
+            </div>
+      `;
+      
+      popupContent += `</div>`;
+
+      const marker = L.marker([step.lat, step.lng], {
+        icon: L.icon({
+          iconUrl: svgIcon,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -16],
+        }),
+      })
+        .bindPopup(popupContent);
+      
+      if (mapRef.current) {
+        marker.addTo(mapRef.current);
+      }
+
+      // Attach event listeners for buttons in the popup
+      marker.on('popupopen', () => {
+        // Use timeout to ensure DOM is ready
+        setTimeout(() => {
+          const editBtn = document.querySelector(`.edit-step-btn[data-step-id="${step.id}"]`);
+          const deleteBtn = document.querySelector(`.delete-step-btn[data-step-id="${step.id}"]`);
+          
+          if (editBtn) {
+            editBtn.addEventListener('click', () => {
+              setSelectedStep(step);
+              setShowEditModal(true);
+            });
+          }
+          
+          if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+              handleDeleteStep(step.id);
+            });
+          }
+        }, 0);
+      });
+
+      layersRef.current.push(marker);
+
+      // Open popup for the most recent marker (last one)
+      if (index === steps.length - 1) {
+        marker.openPopup();
+      }
+      });
+    });
+
+      // Draw polyline connecting all steps
+      if (steps.length > 1 && mapRef.current) {
+        const latlngs = steps.map((step) => [step.lat, step.lng] as [number, number]);
+        const polyline = L.polyline(latlngs, {
+          color: "#667eea",
+          weight: 3,
+          opacity: 0.7,
+          smoothFactor: 1,
+          dashArray: "5, 5",
+        }).addTo(mapRef.current);
+
+        layersRef.current.push(polyline);
+      }
+
+      // Fit map to bounds
+      if (steps.length > 0 && mapRef.current) {
+        const latlngs = steps.map((step) => [step.lat, step.lng] as [number, number]);
+        
+        if (steps.length === 1) {
+          // For a single marker, zoom to that point with a good zoom level
+          mapRef.current.setView([steps[0].lat, steps[0].lng], 12, { animate: true });
+        } else {
+          // For multiple markers, fit all within bounds
+          const bounds = L.latLngBounds(latlngs);
+          mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
+        }
+      }
+  }, [steps]);
+
+  // Center map on last location when a new step is added
+  useEffect(() => {
+    if (!mapRef.current || steps.length === 0) return;
+
+    // Get the last step
+    const lastStep = steps[steps.length - 1];
+    
+    // Smooth animation to the last location only if it's a new addition
+    // (i.e., only center when steps array length increased)
+    mapRef.current.setView([lastStep.lat, lastStep.lng], 13, { animate: true });
+  }, [steps.length]); // Only react to length changes, not the entire array
+
+  return (
+    <>
+      {showEditModal && selectedStep && (
+        <EditStepModal
+          step={selectedStep}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedStep(null);
+          }}
+          onSubmit={handleEditStep}
+        />
+      )}
+      <div
+        id={containerId}
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          background: "#e0e0e0",
+        }}
+      />
+
+      {/* Location Search - Top Left */}
+      <div style={{
+        position: "absolute",
+        top: 16,
+        left: 16,
+        zIndex: 100,
+        maxWidth: 320,
+      }}>
+        <LocationSearch
+          onLocationSelected={handleLocationSelected}
+          token={token}
+        />
+      </div>
+
+      {/* Recommendations Panel - Top Right */}
+      {showRecommendations && selectedLocation && (
+        <div style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          zIndex: 100,
+          maxWidth: 400,
+        }}>
+          <RecommendationsPanel
+            locationName={selectedLocation.name}
+            latitude={selectedLocation.lat}
+            longitude={selectedLocation.lon}
+            onClose={() => setShowRecommendations(false)}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+export default React.memo(TripViewerLeafletComponent);
