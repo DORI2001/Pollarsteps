@@ -17,7 +17,50 @@ A beautiful, modern travel tracking app inspired by Polarsteps. Built with FastA
 
 ---
 
-## 🚀 Quick Start
+## � Screenshots & UI
+
+### Dashboard & Map View
+The main interface features a full-screen Mapbox GL JS map with your trip journey displayed as a beautiful route. Each step is marked with numbered markers showing the timeline of your travel. The UI uses Apple's design system with subtle shadows, glass-morphism effects, and smooth animations.
+
+**Features visible:**
+- Interactive map with custom styled markers
+- Online/Offline status indicator at top
+- Real-time location tracking
+- Numbered step markers showing travel progression
+- Smooth pan and zoom interactions
+
+### Trip Management
+Create and organize multiple trips with rich metadata. Each trip shows:
+- Trip title and description
+- Start/End dates with duration
+- Total distance traveled (calculated from PostGIS)
+- Public/Private toggle
+- Number of steps logged
+
+### Step Details & Logging
+Log each moment of your journey with:
+- Current location (lat/lng)
+- Optional notes and descriptions
+- Altitude information
+- Timestamp
+- Offline support - syncs when back online
+
+### Design System
+The app follows Apple's Human Interface Guidelines:
+- **Color**: iOS Blue (`#007AFF`) for primary actions
+- **Typography**: System font stack for perfect rendering
+- **Animations**: 0.2-0.3s cubic-bezier transitions
+- **Spacing**: 8pt grid for consistent layout
+- **Components**: Glass-morphism cards with hover elevation
+
+### Responsive Layouts
+- **Desktop**: Full-width map with sidebar controls
+- **Tablet**: Optimized touch interactions
+- **Mobile**: Bottom sheet for controls, full-screen map
+
+---
+
+## �🚀 Quick Start
 
 ### Prerequisites
 
