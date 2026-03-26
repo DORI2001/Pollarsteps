@@ -19,23 +19,32 @@ A beautiful, modern travel tracking app inspired by Polarsteps. Built with FastA
 
 ## � Screenshots & UI
 
-### Dashboard & Map View
-The main interface features a full-screen Mapbox GL JS map with your trip journey displayed as a beautiful route. Each step is marked with numbered markers showing the timeline of your travel. The UI uses Apple's design system with subtle shadows, glass-morphism effects, and smooth animations.
+### Authentication & Onboarding
+Beautiful sign-up and login flow with Apple-inspired design:
 
-**Features visible:**
-- Interactive map with custom styled markers
-- Online/Offline status indicator at top
-- Real-time location tracking
-- Numbered step markers showing travel progression
-- Smooth pan and zoom interactions
+![Sign Up Page](screenshots/01-signup.png)
+
+Create an account with email, username, and password fields. Seamless authentication flow with form validation and error handling.
 
 ### Trip Management
-Create and organize multiple trips with rich metadata. Each trip shows:
-- Trip title and description
-- Start/End dates with duration
-- Total distance traveled (calculated from PostGIS)
-- Public/Private toggle
-- Number of steps logged
+Create your first adventure with an intuitive trip creation interface:
+
+![Add Trip Page](screenshots/02-add-trip.png)
+
+Start exploring the world. Pin locations on your map, add stories and memories to each place you visit.
+
+### Dashboard & Map View
+The main interface features a full-screen Mapbox GL JS map with your trip journey displayed as a beautiful route. Each step is marked with numbered markers showing the timeline of your travel.
+
+![Trip Dashboard](screenshots/03-trip-dashboard.png)
+
+**Features visible:**
+- Interactive map with custom styled markers and location details
+- Trip statistics dashboard with distance, location count, and duration analytics
+- Online/Offline status indicator at top
+- Real-time location tracking and memory notes
+- Numbered step markers showing travel progression
+- Edit and delete controls for each location
 
 ### Step Details & Logging
 Log each moment of your journey with:
