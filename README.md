@@ -1,75 +1,22 @@
-# 🗺️ Pollarsteps - Travel Experience Logger
+# 🗺️ Pollarsteps
 
-A beautiful, modern travel tracking app inspired by Pollarsteps. Built with FastAPI (Python), Next.js (React), PostgreSQL+PostGIS, Mapbox, and IndexedDB for offline-first functionality.
+Modern travel tracking built with FastAPI, Next.js, PostgreSQL/PostGIS, Mapbox, and offline-first IndexedDB.
 
-**Apple-inspired design** | **Full-stack production ready** | **Offline sync** | **Geospatial queries**
+**Highlights:** interactive map, offline sync, JWT auth, geospatial queries, TypeScript frontend.
 
 ---
 
 ## ✨ Features
 
-- 🗺️ **Interactive Map** - View your trip journey with Mapbox GL JS
-- 📱 **Responsive Design** - Beautiful Apple-style UI with smooth animations
-- 🛜 **Offline First** - Log locations offline, auto-sync when online
-- 🔐 **Secure Authentication** - JWT-based auth with bcrypt hashing
-- 📍 **Geospatial Queries** - PostGIS integration for location-based features
-- 🎨 **Modern Stack** - FastAPI async, Next.js 14, TypeScript
+- Interactive Mapbox journey view
+- Offline-first logging with auto-sync
+- JWT auth with bcrypt hashing
+- PostGIS-powered geospatial queries
+- Responsive UI with smooth animations
 
 ---
 
-## � Screenshots & UI
-
-### Authentication & Onboarding
-Beautiful sign-up and login flow with Apple-inspired design:
-
-![Sign Up Page](screenshots/01-signup.png)
-
-Create an account with email, username, and password fields. Seamless authentication flow with form validation and error handling.
-
-### Trip Management
-Create your first adventure with an intuitive trip creation interface:
-
-![Add Trip Page](screenshots/02-add-trip.png)
-
-Start exploring the world. Pin locations on your map, add stories and memories to each place you visit.
-
-### Dashboard & Map View
-The main interface features a full-screen Mapbox GL JS map with your trip journey displayed as a beautiful route. Each step is marked with numbered markers showing the timeline of your travel.
-
-![Trip Dashboard](screenshots/03-trip-dashboard.png)
-
-**Features visible:**
-- Interactive map with custom styled markers and location details
-- Trip statistics dashboard with distance, location count, and duration analytics
-- Online/Offline status indicator at top
-- Real-time location tracking and memory notes
-- Numbered step markers showing travel progression
-- Edit and delete controls for each location
-
-### Step Details & Logging
-Log each moment of your journey with:
-- Current location (lat/lng)
-- Optional notes and descriptions
-- Altitude information
-- Timestamp
-- Offline support - syncs when back online
-
-### Design System
-The app follows Apple's Human Interface Guidelines:
-- **Color**: iOS Blue (`#007AFF`) for primary actions
-- **Typography**: System font stack for perfect rendering
-- **Animations**: 0.2-0.3s cubic-bezier transitions
-- **Spacing**: 8pt grid for consistent layout
-- **Components**: Glass-morphism cards with hover elevation
-
-### Responsive Layouts
-- **Desktop**: Full-width map with sidebar controls
-- **Tablet**: Optimized touch interactions
-- **Mobile**: Bottom sheet for controls, full-screen map
-
----
-
-## �🚀 Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -93,7 +40,7 @@ docker compose up --build
 
 ### Option 2: Local Development
 
-#### Setup Backend
+#### Backend
 
 ```bash
 cd backend_app
@@ -110,7 +57,7 @@ docker run -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pollarsteps -p 5432:5432
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-#### Setup Frontend
+#### Frontend
 
 ```bash
 cd frontend
@@ -162,7 +109,7 @@ setup.sh              # Initialization script
 
 ---
 
-## 🔌 API Endpoints
+## 🔌 API Endpoints (auth required unless public)
 
 ### Authentication
 
@@ -219,28 +166,6 @@ Authorization: Bearer {token}
 ```
 
 ---
-
-## 🎨 Design Features
-
-### Apple-Inspired Design System
-
-- **Primary Color**: `#007AFF` (iOS Blue)
-- **Background**: `#F5F5F7` (Light Gray)
-- **Text**: `#1D1D1D` (Dark Gray)
-- **Subtle Shadows & Blur**: Glass-morphism effects
-- **Smooth Animations**: 0.2-0.3s cubic-bezier transitions
-- **Rounded Corners**: 12-20px border radius throughout
-
-### UI Components
-
-- **Full-Screen Map** with custom numbered markers
-- **Glass-morphism Step Cards** with hover elevation
-- **Online/Offline Status Indicator** with pulse animation
-- **Loading Spinner** with elegant backdrop blur
-- **Responsive Typography** with system font stack
-
----
-
 ## 🧪 Testing
 
 ```bash
@@ -260,7 +185,7 @@ python -m pytest tests/test_core.py --watch
 - ✅ JWT token creation & validation
 - ✅ Module imports and dependencies
 - ✅ Schema validation
-- ✅ API route functionality (planned)
+- ✅ API route functionality
 
 ---
 
@@ -328,29 +253,8 @@ docker compose up --build
 
 ---
 
-## 📚 Development Guide
-
-### Adding a new route
-
-1. Create schema: `backend_app/app/schemas/new_feature.py`
-2. Add service: `backend_app/app/services/new_feature.py`
-3. Create route: `backend_app/app/api/routes/new_feature.py`
-4. Include in main: `backend_app/app/main.py`
-5. Add tests: `backend_app/tests/test_core.py`
-
-### Frontend updates
-
-1. Create component: `frontend/components/NewComponent.tsx`
-2. Use in page: `frontend/app/page.tsx`
-3. Follow Apple design system for styling
-4. Test on mobile and desktop
-
----
-
 ## 📄 License
 
 MIT
-
----
 
 Built with ❤️ for travelers everywhere 🌍✈️
