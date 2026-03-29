@@ -1,6 +1,6 @@
-# 🗺️ Polarsteps - Travel Experience Logger
+# 🗺️ Pollarsteps - Travel Experience Logger
 
-A beautiful, modern travel tracking app inspired by Polarsteps. Built with FastAPI (Python), Next.js (React), PostgreSQL+PostGIS, Mapbox, and IndexedDB for offline-first functionality.
+A beautiful, modern travel tracking app inspired by Pollarsteps. Built with FastAPI (Python), Next.js (React), PostgreSQL+PostGIS, Mapbox, and IndexedDB for offline-first functionality.
 
 **Apple-inspired design** | **Full-stack production ready** | **Offline sync** | **Geospatial queries**
 
