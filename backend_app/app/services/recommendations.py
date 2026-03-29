@@ -1,7 +1,7 @@
 """
 Recommendations Service
 Provides AI-powered recommendations for attractions, restaurants, activities
-based on current location using Google Gemini API
+based on current location using Anthropic Claude API
 """
 import aiohttp
 import logging
@@ -12,13 +12,36 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent"
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 
 
 def get_api_key() -> str:
-    """Get the Gemini API key from settings or environment."""
+    """Get the Anthropic API key from settings, environment, or .env file directly."""
+    # Try settings first
     settings = get_settings()
-    return settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    key = settings.anthropic_api_key
+
+    if not key:
+        key = os.getenv("ANTHROPIC_API_KEY", "")
+
+    # Fallback: read .env file directly
+    if not key:
+        try:
+            env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+            env_path = os.path.abspath(env_path)
+            if os.path.exists(env_path):
+                with open(env_path, "r") as f:
+                    content = f.read()
+                    for line in content.split('\n'):
+                        line = line.strip()
+                        if line.startswith("ANTHROPIC_API_KEY=") and not line.startswith("#"):
+                            key = line.split("=", 1)[1].strip()
+                            break
+        except Exception as e:
+            logger.error(f"Error reading .env: {e}")
+            pass
+
+    return key
 
 
 class LocationContext(BaseModel):
@@ -65,8 +88,9 @@ async def get_recommendations(
     try:
         # Check API key dynamically
         api_key = get_api_key()
+        
         if not api_key:
-            logger.warning(f"No Gemini API key configured. Returning mock recommendations for {location_context.location_name}")
+            logger.warning(f"No Claude API key configured. Returning mock recommendations for {location_context.location_name}")
             return get_mock_recommendations(location_context, recommendation_type, budget)
         
         # Build the prompt for the AI agent
@@ -169,7 +193,7 @@ def get_mock_recommendations(
     return RecommendationResponse(
         location=location_context.location_name,
         recommendations=mock_recommendations,
-        summary=f"✨ Recommended places and activities in {location_context.location_name} (Mock Data - Configure GEMINI_API_KEY for real recommendations)"
+        summary=f"✨ Recommended places and activities in {location_context.location_name} (Mock Data - Configure ANTHROPIC_API_KEY for real recommendations)"
     )
 
 
@@ -215,54 +239,48 @@ Focus on popular, highly-rated places. Include a mix of must-see attractions and
 
 async def call_llm_api(prompt: str) -> Optional[str]:
     """
-    Call the Google Gemini API to get recommendations.
+    Call the Anthropic Claude API to get recommendations.
     """
     try:
         api_key = get_api_key()
-        
+
         payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": prompt
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": 1000
-            }
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 1024,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
         }
-        
-        url = f"{GEMINI_API_URL}?key={api_key}"
-        
+
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url,
+                ANTHROPIC_API_URL,
                 json=payload,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    logger.error(f"Gemini API error: {resp.status} - {error_text}")
+                    logger.error(f"Claude API error: {resp.status} - {error_text}")
                     return None
-                
+
                 data = await resp.json()
-                
-                # Gemini returns text in candidates[0].content.parts[0].text
-                if "candidates" in data and len(data["candidates"]) > 0:
-                    candidate = data["candidates"][0]
-                    if "content" in candidate and "parts" in candidate["content"]:
-                        if len(candidate["content"]["parts"]) > 0:
-                            return candidate["content"]["parts"][0]["text"]
-                
-                logger.error("Unexpected Gemini API response structure")
+
+                # Claude API returns text in content[0].text
+                if "content" in data and len(data["content"]) > 0:
+                    return data["content"][0]["text"]
+
+                logger.error("Unexpected Claude API response structure")
                 return None
-    
+
     except Exception as e:
-        logger.error(f"Gemini API call failed: {str(e)}")
+        logger.error(f"Claude API call failed: {str(e)}")
         return None
 
 

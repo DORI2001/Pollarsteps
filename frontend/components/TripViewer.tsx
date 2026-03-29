@@ -2,6 +2,7 @@
 
 import React from "react";
 import TripViewerLeaflet from "./TripViewerLeaflet";
+import { useColors } from "@/lib/theme";
 
 type Step = {
   id: string;
@@ -18,17 +19,11 @@ type TripViewerProps = {
   tripId?: string;
   token?: string;
   onStepsChange?: (updatedSteps: Step[]) => void;
+  fitTrigger?: number;
 };
 
-const COLORS = {
-  primary: "#667eea",
-  primaryDark: "#764ba2",
-  gray: "#F5F5F7",
-  darkGray: "#1D1D1D",
-  lightText: "#86868B",
-};
-
-const TripViewerComponent: React.FC<TripViewerProps> = ({ steps, onMapClick, tripId, token, onStepsChange }) => {
+const TripViewerComponent: React.FC<TripViewerProps> = ({ steps, onMapClick, tripId, token, onStepsChange, fitTrigger }) => {
+  const COLORS = useColors();
   return (
     <div
       style={{
@@ -37,18 +32,19 @@ const TripViewerComponent: React.FC<TripViewerProps> = ({ steps, onMapClick, tri
         right: 0,
         bottom: 0,
         left: 0,
-        background: COLORS.gray,
+        background: COLORS.mapBg,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       
-      <TripViewerLeaflet 
-        steps={steps} 
+      <TripViewerLeaflet
+        steps={steps}
         onMapClick={onMapClick}
         tripId={tripId || ""}
         token={token || ""}
         onStepsChange={onStepsChange}
+        fitTrigger={fitTrigger}
       />
     </div>
   );

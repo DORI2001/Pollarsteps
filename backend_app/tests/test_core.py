@@ -1,4 +1,4 @@
-"""Test suite for Polarsteps backend"""
+"""Test suite for Pollarsteps backend"""
 import pytest
 from app.core.security import hash_password, verify_password, create_token, decode_token
 from datetime import datetime, timezone

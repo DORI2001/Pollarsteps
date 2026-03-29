@@ -1,17 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-
-const COLORS = {
-  primary: "#667eea",
-  primaryDark: "#764ba2",
-  background: "#F5F5F7",
-  surface: "#FFFFFF",
-  text: "#1D1D1D",
-  textSecondary: "#86868B",
-  border: "#E5E5EA",
-  success: "#34C759",
-};
+import { useColors } from "@/lib/theme";
 
 interface EnhancedStatsProps {
   steps: any[];
@@ -32,6 +22,7 @@ export function EnhancedStatistics({
   tripDurationDays,
   totalDaysTravelled,
 }: EnhancedStatsProps) {
+  const COLORS = useColors();
   // Calculate advanced statistics
   const stats = useMemo(() => {
     const avgDailyDistance =

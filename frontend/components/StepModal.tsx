@@ -2,20 +2,7 @@
 
 import React, { useState } from "react";
 import { api } from "@/lib/api";
-
-const COLORS = {
-  primary: "#667eea",
-  primaryDark: "#764ba2",
-  secondary: "#5AC8FA",
-  background: "#F5F5F7",
-  surface: "#FFFFFF",
-  text: "#1D1D1D",
-  textSecondary: "#86868B",
-  border: "#E5E5EA",
-  success: "#34C759",
-  warning: "#FF9500",
-  error: "#FF3B30",
-};
+import { useColors } from "@/lib/theme";
 
 interface StepModalProps {
   coords: { lat: number; lng: number };
@@ -24,6 +11,7 @@ interface StepModalProps {
 }
 
 export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
+  const COLORS = useColors();
   const [locationName, setLocationName] = useState("");
   const [note, setNote] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -51,7 +39,6 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
   };
 
   const handleSubmit = async () => {
-    console.log("[StepModal] handleSubmit called");
     
     if (!note.trim()) {
       setError("Please add a memory/note for this location");
@@ -62,9 +49,7 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
     setError("");
 
     try {
-      console.log("[StepModal] Calling onSubmit with:", { note, imageUrl, locationName });
       await onSubmit(note.trim(), imageUrl || undefined, locationName.trim() || undefined);
-      console.log("[StepModal] onSubmit succeeded");
       
       setLocationName("");
       setNote("");

@@ -2,20 +2,7 @@
 
 import React, { useState } from "react";
 import { api } from "@/lib/api";
-
-const COLORS = {
-  primary: "#667eea",
-  primaryDark: "#764ba2",
-  secondary: "#5AC8FA",
-  background: "#F5F5F7",
-  surface: "#FFFFFF",
-  text: "#1D1D1D",
-  textSecondary: "#86868B",
-  border: "#E5E5EA",
-  success: "#34C759",
-  warning: "#FF9500",
-  error: "#FF3B30",
-};
+import { useColors } from "@/lib/theme";
 
 interface RecommendationPanelProps {
   currentLocation?: { name: string; lat: number; lng: number };
@@ -26,6 +13,7 @@ export function RecommendationPanel({
   currentLocation,
   onClose,
 }: RecommendationPanelProps) {
+  const COLORS = useColors();
   const [question, setQuestion] = useState("");
   const [recommendations, setRecommendations] = useState<any>(null);
   const [loading, setLoading] = useState(false);

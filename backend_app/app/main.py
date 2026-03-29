@@ -5,7 +5,12 @@ from app.core.db import engine, Base
 from app.api.routes import auth, trips, steps, ai_chronicler, analytics, uploads, geocoding, recommendations
 import os
 
-app = FastAPI(title="Polarsteps Clone API")
+# Load .env file explicitly at startup
+from dotenv import load_dotenv
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(os.path.abspath(env_path), override=True)
+
+app = FastAPI(title="Pollarsteps Clone API")
 
 # Add CORS middleware
 app.add_middleware(

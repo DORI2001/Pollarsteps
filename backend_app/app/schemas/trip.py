@@ -24,6 +24,7 @@ class TripRead(TripBase):
     updated_at: datetime
     total_distance: Optional[float] = 0.0
     total_steps: Optional[int] = 0
+    share_token: Optional[str] = None
 
     class Config:
         from_attributes = True

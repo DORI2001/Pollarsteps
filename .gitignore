@@ -54,6 +54,11 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# OS temp artifacts
+.fuse_hidden*
 
 # Docker
 .dockerignore

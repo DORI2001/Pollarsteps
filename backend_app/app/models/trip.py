@@ -15,6 +15,7 @@ class Trip(Base):
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)  # Trip end date for calculating duration
     is_public = Column(Boolean, nullable=False, default=False)
+    share_token = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 

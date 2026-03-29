@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useCallback, useState } from "react";
+import dynamic from "next/dynamic";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { EditStepModal } from "./EditStepModal";
@@ -25,6 +26,7 @@ type TripViewerLeafletProps = {
   onStepsChange?: (updatedSteps: Step[]) => void;
   tripId: string;
   token: string;
+  fitTrigger?: number;
 };
 
 // Reverse geocode coordinates to location name
@@ -43,12 +45,12 @@ async function getLocationName(lat: number, lng: number): Promise<string> {
     }
     return ''; // Return empty string on fallback, no coordinates
   } catch (error) {
-    console.log("Geocoding failed");
+    // Geocoding failed silently
     return ''; // Return empty string on failure, no coordinates
   }
 }
 
-function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token }: TripViewerLeafletProps) {
+function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token, fitTrigger }: TripViewerLeafletProps) {
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<(L.Marker | L.Polyline)[]>([]);
   const containerId = "leaflet-map-container";
@@ -158,7 +160,6 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
     );
 
     tileLayer.addTo(map);
-    console.log("✅ Tile layer added to map");
 
     mapRef.current = map;
 
@@ -167,7 +168,6 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
       memoizedOnMapClick({ lat: e.latlng.lat, lng: e.latlng.lng });
     });
 
-    console.log("✅ Map initialized");
 
     return () => {
       // Cleanup on unmount
@@ -373,11 +373,29 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
 
     // Get the last step
     const lastStep = steps[steps.length - 1];
-    
+
     // Smooth animation to the last location only if it's a new addition
     // (i.e., only center when steps array length increased)
     mapRef.current.setView([lastStep.lat, lastStep.lng], 13, { animate: true });
   }, [steps.length]); // Only react to length changes, not the entire array
+
+  // Re-fit map to show all steps when fitTrigger changes (e.g., after cancelling step creation)
+  useEffect(() => {
+    if (!mapRef.current || steps.length === 0 || !fitTrigger) return;
+
+    mapRef.current.invalidateSize();
+
+    setTimeout(() => {
+      if (!mapRef.current) return;
+      if (steps.length === 1) {
+        mapRef.current.setView([steps[0].lat, steps[0].lng], 12, { animate: true });
+      } else {
+        const latlngs = steps.map((s) => [s.lat, s.lng] as [number, number]);
+        const bounds = L.latLngBounds(latlngs);
+        mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
+      }
+    }, 100);
+  }, [fitTrigger]);
 
   return (
     <>
@@ -438,4 +456,8 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
   );
 }
 
-export default React.memo(TripViewerLeafletComponent);
+const TripViewerLeaflet = React.memo(TripViewerLeafletComponent);
+
+export default dynamic(() => Promise.resolve(TripViewerLeaflet), {
+  ssr: false,
+});

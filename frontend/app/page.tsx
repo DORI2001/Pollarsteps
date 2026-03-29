@@ -1,9 +1,8 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useColors } from "@/lib/theme";
 import { TripViewer } from "@/components/TripViewer";
 import { StepModal } from "@/components/StepModal";
 import { TripToolbar } from "@/components/TripToolbar";
@@ -13,26 +12,13 @@ import { TripSeparation } from "@/components/TripSeparation";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { RecommendationPanel } from "@/components/RecommendationPanel";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { ThemeToggle } from "@/components/ThemeToggle";
+
 import { session, api } from "@/lib/api";
 import { calculateTotalDistance } from "@/lib/distance";
 
-const COLORS = {
-  primary: "#667eea",
-  primaryDark: "#764ba2",
-  secondary: "#5AC8FA",
-  background: "#F5F5F7",
-  surface: "#FFFFFF",
-  text: "#1D1D1D",
-  textSecondary: "#86868B",
-  border: "#E5E5EA",
-  success: "#34C759",
-  warning: "#FF9500",
-  error: "#FF3B30",
-};
-
 export default function Home() {
   const router = useRouter();
+  const COLORS = useColors();
   const [user, setUser] = useState<any>(null);
   const [trips, setTrips] = useState<any[]>([]);
   const [currentTrip, setCurrentTrip] = useState<any>(null);
@@ -44,10 +30,12 @@ export default function Home() {
   const [showPhotoGallery, setShowPhotoGallery] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [recommendationLocation, setRecommendationLocation] = useState<any>(null);
+  const [mapFitCounter, setMapFitCounter] = useState(0);
 
   return (
     <ProtectedRoute>
       <HomeContent
+        COLORS={COLORS}
         router={router}
         user={user}
         setUser={setUser}
@@ -71,12 +59,15 @@ export default function Home() {
         setShowRecommendations={setShowRecommendations}
         recommendationLocation={recommendationLocation}
         setRecommendationLocation={setRecommendationLocation}
+        mapFitCounter={mapFitCounter}
+        setMapFitCounter={setMapFitCounter}
       />
     </ProtectedRoute>
   );
 }
 
 function HomeContent({
+  COLORS,
   router,
   user,
   setUser,
@@ -100,6 +91,8 @@ function HomeContent({
   setShowRecommendations,
   recommendationLocation,
   setRecommendationLocation,
+  mapFitCounter,
+  setMapFitCounter,
 }: any) {
 
   // Check authentication
@@ -113,17 +106,13 @@ function HomeContent({
     }
 
     setUser(user);
-    console.log("[Home] User loaded:", user?.name || user?.email);
 
     // Load trips
     const loadTrips = async () => {
       try {
-        console.log("[Home] Loading trips with token:", token ? `${token.substring(0, 20)}...` : "NO TOKEN");
         const trips = await api.getTrips(token);
-        console.log("[Home] Trips loaded successfully:", trips.length, "trips", trips);
         
         if (!trips || trips.length === 0) {
-          console.warn("[Home] No trips returned from API");
           setTrips([]);
           setCurrentTrip(null);
           setSteps([]);
@@ -133,11 +122,9 @@ function HomeContent({
         setTrips(trips);
         // Load the LATEST trip (last in array), not the first one
         const latestTrip = trips[trips.length - 1];
-        console.log("[Home] Setting latest trip as current:", latestTrip.id);
-        
+
         try {
           const tripSteps = await api.getSteps(token, latestTrip.id);
-          console.log("[Home] Steps loaded:", tripSteps.length, tripSteps);
           // Set both steps and currentTrip with steps included
           setSteps(tripSteps);
           setCurrentTrip({ ...latestTrip, steps: tripSteps });
@@ -181,10 +168,7 @@ function HomeContent({
     }
 
     try {
-      console.log("Creating trip with title:", newTripTitle.trim());
-      console.log("Token:", token ? `${token.substring(0, 20)}...` : "NO TOKEN");
       const trip = await api.createTrip(token, newTripTitle.trim());
-      console.log("Trip created:", trip);
       setTrips([...trips, trip]);
       setCurrentTrip(trip);
       setSteps([]);
@@ -201,33 +185,48 @@ function HomeContent({
     setShowStepModal(true);
   };
 
+  const handleCancelStep = () => {
+    setShowStepModal(false);
+    setSelectedMapCoords(null);
+    const token = session.getToken();
+
+    // Refresh steps so markers stay visible without a full page reload
+    if (token && currentTrip?.id) {
+      api
+        .getSteps(token, currentTrip.id)
+        .then((freshSteps) => {
+          setSteps(freshSteps);
+          setCurrentTrip({ ...currentTrip, steps: freshSteps });
+        })
+        .catch((err) => {
+          console.error("Failed to refresh steps after cancel:", err);
+          // Fallback: force rerender with existing steps
+          setSteps([...steps]);
+          setCurrentTrip(currentTrip ? { ...currentTrip, steps: [...steps] } : currentTrip);
+        })
+        .finally(() => {
+          setMapFitCounter((c: number) => c + 1);
+        });
+    } else {
+      // No token/trip; still force rerender so markers remain
+      setSteps([...steps]);
+      setCurrentTrip(currentTrip ? { ...currentTrip, steps: [...steps] } : currentTrip);
+      setMapFitCounter((c: number) => c + 1);
+    }
+  };
+
   const handleAddStep = async (note: string, imageUrl?: string, locationName?: string) => {
-    console.log("[HandleAddStep] Starting - tripId:", currentTrip?.id, "coords:", selectedMapCoords);
-    
     if (!currentTrip || !selectedMapCoords) {
-      console.error("[HandleAddStep] Missing trip or coordinates", {
-        currentTrip: currentTrip?.id,
-        selectedMapCoords
-      });
+      console.error("Missing trip or coordinates");
       return;
     }
     const token = session.getToken();
     if (!token) {
-      console.error("[HandleAddStep] No token");
       router.push("/signup");
       return;
     }
 
     try {
-      console.log("[HandleAddStep] Calling api.createStep with:", {
-        tripId: currentTrip.id,
-        lat: selectedMapCoords.lat,
-        lng: selectedMapCoords.lng,
-        note,
-        imageUrl,
-        locationName
-      });
-      
       const step = await api.createStep(
         token,
         currentTrip.id,
@@ -237,27 +236,15 @@ function HomeContent({
         imageUrl,
         locationName
       );
-      
-      console.log("[HandleAddStep] Step created successfully:", step);
-      
+
       const updatedSteps = [...steps, step];
-      console.log("[HandleAddStep] Updated steps:", updatedSteps);
-      
       setSteps(updatedSteps);
       // Update currentTrip to keep steps in sync
       setCurrentTrip({ ...currentTrip, steps: updatedSteps });
       setShowStepModal(false);
       setSelectedMapCoords(null);
-      
-      console.log("[HandleAddStep] Step added successfully!");
     } catch (err: any) {
-      console.error("[HandleAddStep] Failed to add step - FULL ERROR:", {
-        message: err.message,
-        detail: err.detail,
-        code: err.code,
-        status: err.status,
-        fullError: JSON.stringify(err)
-      });
+      console.error("Failed to add step:", err);
       // Error will be shown in StepModal
       throw err;
     }
@@ -276,66 +263,264 @@ function HomeContent({
     router.push("/signup");
   };
 
+  const handleSplitTrip = async (newTripTitle: string, stepsToMove: any[]): Promise<void> => {
+    // TODO: Implement trip splitting via API
+    console.warn("Trip splitting not yet implemented");
+  };
+
   if (loading) {
     return (
-      <div style={{ width: "100vw", height: "100vh", background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: 50, height: 50, borderRadius: "50%", border: "3px solid rgba(255, 255, 255, 0.3)", borderTopColor: "white", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
+      <div style={{
+        width: "100vw",
+        height: "100vh",
+        background: COLORS.background,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column"
+      }}>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+          @keyframes fadeInLoadingText {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .loading-spinner {
+            animation: spin 1s linear infinite;
+          }
+          .loading-text {
+            animation: fadeInLoadingText 0.8s ease-out 0.3s both;
+          }
+        `}</style>
+        <div style={{
+          width: 64,
+          height: 64,
+          borderRadius: "50%",
+          border: `3px solid ${COLORS.border}`,
+          borderTopColor: COLORS.primary,
+          borderRightColor: COLORS.secondary,
+          marginBottom: 24,
+          animation: "spin 0.8s linear infinite",
+        }} />
+        <p style={{
+          fontSize: 17,
+          fontWeight: 400,
+          letterSpacing: "-0.4px",
+          color: COLORS.textSecondary,
+          margin: 0,
+          textAlign: "center",
+        }}>
+          Loading your adventures...
+        </p>
       </div>
     );
   }
 
   if (!currentTrip) {
     return (
-      <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)` }}>
+      <div style={{ minHeight: "100vh", background: COLORS.background }}>
         <style>{`
-          @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-          @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-          .fade-in { animation: fadeIn 0.6s ease-out; }
-          .slide-up { animation: slideUp 0.6s ease-out; }
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes scaleInGently {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          .welcome-header {
+            animation: fadeInUp 0.6s ease-out;
+          }
+          .create-card {
+            animation: scaleInGently 0.7s ease-out 0.1s both;
+          }
+          .info-card {
+            animation: fadeInUp 0.6s ease-out 0.3s both;
+          }
         `}</style>
 
-        {/* Header */}
-        <div style={{ padding: "20px 24px", background: "rgba(255, 255, 255, 0.95)", backdropFilter: "blur(10px)", borderBottom: `1px solid rgba(255, 255, 255, 0.2)`, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)" }}>
+        {/* Header with Glass Morphism */}
+        <div style={{
+          padding: "16px 24px",
+          background: `${COLORS.cardBg}`,
+          backdropFilter: "saturate(180%) blur(20px)",
+          borderBottom: `1px solid ${COLORS.separator}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          boxShadow: `0 2px 12px ${COLORS.shadowColor}`
+        }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ fontSize: 28 }}>🗺️</div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: COLORS.text, margin: 0 }}>Polarsteps</h1>
+            <div style={{ fontSize: 28, lineHeight: 1 }}>🗺️</div>
+            <h1 style={{
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: "-0.4px",
+              color: COLORS.text,
+              margin: 0
+            }}>
+              Pollarsteps
+            </h1>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <ThemeToggle />
-            <button onClick={handleLogout} style={{ padding: "8px 16px", background: "transparent", color: COLORS.error, border: `1px solid ${COLORS.error}`, borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: "10px 16px",
+                background: "transparent",
+                color: COLORS.error,
+                border: `1px solid ${COLORS.error}`,
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: "-0.3px",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = COLORS.error;
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = COLORS.error;
+              }}
+            >
               Sign Out
             </button>
           </div>
         </div>
 
         {/* Main Content */}
-        <div style={{ padding: "40px 24px", maxWidth: 600, margin: "0 auto" }}>
+        <div style={{
+          padding: "60px 24px 40px",
+          maxWidth: 540,
+          margin: "0 auto"
+        }}>
           {/* Welcome Section */}
-          <div style={{ marginBottom: 40, textAlign: "center", animation: "slideUp 0.6s ease-out" }}>
-            <h2 style={{ fontSize: 32, fontWeight: 700, color: "white", marginBottom: 8, margin: 0 }}>
-              Welcome back, {user?.name || "Traveler"}!
+          <div style={{
+            marginBottom: 56,
+            textAlign: "center"
+          }} className="welcome-header">
+            <h2 style={{
+              fontSize: 34,
+              fontWeight: 700,
+              letterSpacing: "-0.5px",
+              color: COLORS.text,
+              margin: "0 0 12px 0",
+              lineHeight: 1.2
+            }}>
+              Welcome back, {user?.name || "Traveller"}!
             </h2>
-            <p style={{ fontSize: 16, color: "rgba(255, 255, 255, 0.9)", marginBottom: 30, margin: 0, paddingTop: 8 }}>
+            <p style={{
+              fontSize: 17,
+              fontWeight: 400,
+              letterSpacing: "-0.4px",
+              color: COLORS.textSecondary,
+              margin: 0,
+              lineHeight: 1.5
+            }}>
               Create your first adventure by starting a new trip
             </p>
           </div>
 
           {/* Create Trip Card */}
-          <div style={{ background: "rgba(255, 255, 255, 0.95)", borderRadius: 20, padding: 28, boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)", animation: "fadeIn 0.8s ease-out", marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: COLORS.text, marginBottom: 12, letterSpacing: "0.3px", textTransform: "uppercase" }}>Trip Name</label>
-            <input type="text" placeholder="e.g., European Summer, Japan 2026" value={newTripTitle} onChange={(e) => setNewTripTitle(e.target.value)} onKeyPress={(e) => e.key === "Enter" && handleCreateTrip()} style={{ width: "100%", padding: "14px 16px", border: `2px solid #e2e8f0`, borderRadius: 12, fontSize: 16, boxSizing: "border-box", background: "#F5F5F7", color: COLORS.text, marginBottom: 16, fontFamily: "inherit", transition: "all 0.2s", outline: "none" }} onFocus={(e) => { e.currentTarget.style.borderColor = COLORS.primary; e.currentTarget.style.background = "#F5F5F7"; e.currentTarget.style.boxShadow = `0 0 0 3px rgba(102, 126, 234, 0.1)`; }} onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.background = "#F5F5F7"; e.currentTarget.style.boxShadow = "none"; }} />
-            <button onClick={handleCreateTrip} style={{ width: "100%", padding: "14px 16px", background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`, color: "white", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 12px rgba(102, 126, 234, 0.3)" }} onMouseOver={(e) => { e.currentTarget.style.boxShadow = "0 6px 16px rgba(102, 126, 234, 0.4)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseOut={(e) => { e.currentTarget.style.boxShadow = "0 4px 12px rgba(102, 126, 234, 0.3)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+          <div style={{
+            background: COLORS.surfaceElevated,
+            borderRadius: 24,
+            padding: 32,
+            marginBottom: 28,
+            boxShadow: `0 8px 28px ${COLORS.shadowColor}`
+          }} className="create-card">
+            <label style={{
+              display: "block",
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "0.5px",
+              color: COLORS.textSecondary,
+              marginBottom: 16,
+              textTransform: "uppercase"
+            }}>
+              Trip Name
+            </label>
+            <input
+              type="text"
+              placeholder="e.g., European Summer, Japan 2026"
+              value={newTripTitle}
+              onChange={(e) => setNewTripTitle(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && handleCreateTrip()}
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                border: `1px solid ${COLORS.separator}`,
+                borderRadius: 12,
+                fontSize: 16,
+                fontWeight: 400,
+                boxSizing: "border-box",
+                background: COLORS.background,
+                color: COLORS.text,
+                marginBottom: 20,
+                fontFamily: "inherit",
+                transition: "all 0.2s ease",
+                outline: "none"
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = COLORS.primary;
+                e.currentTarget.style.boxShadow = `0 0 0 3px rgba(91, 108, 240, 0.1)`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = COLORS.separator;
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+            <button
+              onClick={handleCreateTrip}
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`,
+                color: "white",
+                border: "none",
+                borderRadius: 12,
+                fontSize: 15,
+                fontWeight: 600,
+                letterSpacing: "-0.3px",
+                cursor: "pointer",
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                boxShadow: `0 4px 16px rgba(91, 108, 240, 0.25)`
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.boxShadow = `0 8px 24px rgba(91, 108, 240, 0.35)`;
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.boxShadow = `0 4px 16px rgba(91, 108, 240, 0.25)`;
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
+            >
               Create Trip
             </button>
           </div>
 
           {/* Info Card */}
-          <div style={{ padding: 24, background: "rgba(255, 255, 255, 0.95)", borderRadius: 16, textAlign: "center", boxShadow: "0 2px 12px rgba(0, 0, 0, 0.08)" }}>
-            <div style={{ fontSize: 16, marginBottom: 8 }}>✨</div>
-            <p style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 1.6, margin: 0 }}>
+          <div style={{
+            padding: 28,
+            background: COLORS.surfaceElevated,
+            borderRadius: 20,
+            textAlign: "center",
+            boxShadow: `0 4px 12px ${COLORS.shadowColor}`,
+            borderTop: `1px solid ${COLORS.separator}`
+          }} className="info-card">
+            <p style={{
+              fontSize: 15,
+              fontWeight: 400,
+              letterSpacing: "-0.3px",
+              color: COLORS.textSecondary,
+              lineHeight: 1.6,
+              margin: 0
+            }}>
               Start exploring the world. Pin locations on your map, add stories and memories to each place you visit.
             </p>
           </div>
@@ -373,32 +558,27 @@ function HomeContent({
     if (!token) return;
 
     try {
-      console.log("[DELETE] Starting delete for trip:", tripId);
       const deleteResult = await api.deleteTrip(token, tripId);
-      console.log("[DELETE] Trip deleted successfully:", deleteResult);
-      
+
       // Remove trip from list
       const updatedTrips = trips.filter((t: any) => t.id !== tripId);
       setTrips(updatedTrips);
-      
+
       // If deleted trip was current, select next one or show create screen
       if (currentTrip?.id === tripId) {
         if (updatedTrips.length > 0) {
           try {
-            console.log("[DELETE] Loading next trip:", updatedTrips[0].id);
             const nextTrip = await api.getTrip(token, updatedTrips[0].id);
             setCurrentTrip(nextTrip);
             setSteps(nextTrip.steps || []);
-            console.log("[DELETE] Loaded next trip successfully");
           } catch (nextErr: any) {
-            console.error("[DELETE] Error loading next trip:", nextErr);
+            console.error("Error loading next trip:", nextErr);
             // If loading next trip fails, try other trips
             if (updatedTrips.length > 1) {
               try {
                 const fallbackTrip = await api.getTrip(token, updatedTrips[1].id);
                 setCurrentTrip(fallbackTrip);
                 setSteps(fallbackTrip.steps || []);
-                console.log("[DELETE] Loaded fallback trip");
               } catch (fallbackErr) {
                 // Still failed, just use first trip data from list
                 setCurrentTrip(updatedTrips[0]);
@@ -413,13 +593,11 @@ function HomeContent({
         } else {
           setCurrentTrip(null);
           setSteps([]);
-          console.log("[DELETE] No more trips, showing create screen");
         }
       }
     } catch (err: any) {
-      console.error("[DELETE] Full error:", err);
+      console.error("Delete failed:", err);
       const errorMsg = err?.message || err?.toString() || "Unknown error";
-      console.error("[DELETE] Error message:", errorMsg);
       alert(`Delete failed: ${errorMsg}`);
       throw err;
     }
@@ -443,7 +621,7 @@ function HomeContent({
   };
 
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh", background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)` }}>
+    <div style={{ position: "relative", width: "100vw", height: "100vh", background: COLORS.background }}>
       <style>{`
         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         .slide-down { animation: slideDown 0.3s ease-out; }
@@ -461,12 +639,13 @@ function HomeContent({
 
       {/* Map Container */}
       <div style={{ position: "absolute", top: "70px", left: 0, right: steps.length > 0 ? "420px" : 0, bottom: 0, zIndex: 0, overflow: "hidden" }}>
-        <TripViewer 
-          steps={steps} 
+        <TripViewer
+          steps={steps}
           onMapClick={handleMapClick}
           tripId={currentTrip?.id}
           token={session.getToken() || undefined}
           onStepsChange={handleStepsChange}
+          fitTrigger={mapFitCounter}
         />
       </div>
 
@@ -488,21 +667,21 @@ function HomeContent({
             bottom: 24,
             width: 380,
             maxWidth: "calc(100vw - 48px)",
-            background: "rgba(255, 255, 255, 0.95)",
-            borderRadius: 16,
-            padding: 20,
-            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.2)",
-            backdropFilter: "blur(10px)",
+            background: COLORS.cardBg,
+            borderRadius: 20,
+            padding: 24,
+            boxShadow: `0 12px 40px ${COLORS.shadowHeavy}`,
+            backdropFilter: "saturate(180%) blur(20px)",
             zIndex: 70,
             pointerEvents: "auto",
             overflowY: "auto",
             overflowX: "hidden",
+            borderTop: `1px solid ${COLORS.separator}`
           }}
         >
           {/* Ask Questions Button - Top of Panel */}
           <button
             onClick={() => {
-              // Use first step location
               const firstStep = steps[0];
               if (firstStep && firstStep.lat && firstStep.lng) {
                 setRecommendationLocation({
@@ -517,29 +696,40 @@ function HomeContent({
             }}
             style={{
               width: "100%",
-              marginBottom: 16,
+              marginBottom: 20,
               padding: "12px 16px",
-              background: COLORS.secondary,
+              background: `linear-gradient(135deg, ${COLORS.secondary} 0%, ${COLORS.secondary}dd 100%)`,
               color: "white",
               border: "none",
               borderRadius: 10,
               fontSize: 14,
               fontWeight: 600,
+              letterSpacing: "-0.3px",
               cursor: "pointer",
-              transition: "all 0.2s",
+              transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+              boxShadow: `0 4px 12px rgba(6, 182, 212, 0.2)`
             }}
             onMouseOver={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.opacity = "0.9";
+              e.currentTarget.style.boxShadow = `0 6px 16px rgba(6, 182, 212, 0.3)`;
+              e.currentTarget.style.transform = "translateY(-1px)";
             }}
             onMouseOut={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              e.currentTarget.style.boxShadow = `0 4px 12px rgba(6, 182, 212, 0.2)`;
+              e.currentTarget.style.transform = "translateY(0)";
             }}
           >
-            ❓ Ask Questions
+            Ask Questions
           </button>
 
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: COLORS.text, margin: "0 0 16px 0" }}>
-            📊 Trip Statistics
+          <h3 style={{
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: "0.5px",
+            color: COLORS.textSecondary,
+            margin: "0 0 16px 0",
+            textTransform: "uppercase"
+          }}>
+            Trip Statistics
           </h3>
           <TripStatistics
             trip={currentTrip}
@@ -551,9 +741,21 @@ function HomeContent({
             totalDistance={totalDistanceMemo}
           />
 
-          <div style={{ marginTop: 16, marginBottom: 16, borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: COLORS.text, margin: "0 0 16px 0" }}>
-              📈 Detailed Analytics
+          <div style={{
+            marginTop: 20,
+            marginBottom: 20,
+            borderTop: `1px solid ${COLORS.separator}`,
+            paddingTop: 20
+          }}>
+            <h3 style={{
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "0.5px",
+              color: COLORS.textSecondary,
+              margin: "0 0 16px 0",
+              textTransform: "uppercase"
+            }}>
+              Detailed Analytics
             </h3>
             <EnhancedStatistics
               steps={steps}
@@ -569,25 +771,29 @@ function HomeContent({
               onClick={() => setShowPhotoGallery(true)}
               style={{
                 width: "100%",
-                marginTop: 16,
+                marginTop: 20,
                 padding: "12px 16px",
-                background: COLORS.primary,
+                background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`,
                 color: "white",
                 border: "none",
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 600,
+                letterSpacing: "-0.3px",
                 cursor: "pointer",
-                transition: "all 0.2s",
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                boxShadow: `0 4px 12px rgba(91, 108, 240, 0.25)`
               }}
               onMouseOver={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.opacity = "0.9";
+                e.currentTarget.style.boxShadow = `0 6px 16px rgba(91, 108, 240, 0.35)`;
+                e.currentTarget.style.transform = "translateY(-1px)";
               }}
               onMouseOut={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+                e.currentTarget.style.boxShadow = `0 4px 12px rgba(91, 108, 240, 0.25)`;
+                e.currentTarget.style.transform = "translateY(0)";
               }}
             >
-              📷 View Photo Gallery
+              View Photo Gallery
             </button>
           )}
 
@@ -600,7 +806,7 @@ function HomeContent({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.7)",
+            background: "rgba(0, 0, 0, 0.5)",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -608,18 +814,20 @@ function HomeContent({
             zIndex: 500,
             padding: 20,
             overflowY: "auto",
+            backdropFilter: "blur(12px)"
           }}
           onClick={() => setShowPhotoGallery(false)}
         >
           <div
             style={{
-              background: COLORS.surface,
-              borderRadius: 16,
-              padding: 20,
+              background: COLORS.surfaceElevated,
+              borderRadius: 24,
+              padding: 28,
               maxWidth: "95vw",
               maxHeight: "95vh",
               overflowY: "auto",
-              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+              boxShadow: `0 20px 60px ${COLORS.shadowHeavy}`,
+              borderTop: `1px solid ${COLORS.separator}`
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -628,23 +836,44 @@ function HomeContent({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: 16,
+                marginBottom: 24,
               }}
             >
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: COLORS.text, margin: 0 }}>
-                📷 {currentTrip?.title} - Photo Gallery
+              <h2 style={{
+                fontSize: 22,
+                fontWeight: 700,
+                letterSpacing: "-0.4px",
+                color: COLORS.text,
+                margin: 0
+              }}>
+                {currentTrip?.title} - Photo Gallery
               </h2>
               <button
                 onClick={() => setShowPhotoGallery(false)}
                 style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: 24,
+                  width: 40,
+                  height: 40,
+                  background: COLORS.background,
+                  border: `1px solid ${COLORS.separator}`,
+                  borderRadius: "50%",
+                  fontSize: 18,
                   cursor: "pointer",
                   color: COLORS.textSecondary,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "all 0.2s ease"
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = COLORS.separator;
+                  e.currentTarget.style.color = COLORS.text;
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = COLORS.background;
+                  e.currentTarget.style.color = COLORS.textSecondary;
                 }}
               >
-                ✕
+                ×
               </button>
             </div>
             <PhotoGallery steps={steps} title={currentTrip?.title || "Trip"} />
@@ -664,22 +893,12 @@ function HomeContent({
       {showStepModal && selectedMapCoords && (
         <StepModal
           coords={selectedMapCoords}
-          onClose={() => setShowStepModal(false)}
+          onClose={handleCancelStep}
           onSubmit={handleAddStep}
         />
       )}
     </div>
   );
-}
-
-// Handler for splitting trips
-async function handleSplitTrip(
-  newTripTitle: string,
-  stepsToMove: any[]
-): Promise<void> {
-  // This would be implemented in the HomeContent component
-  // For now, it's a placeholder that would call the API
-  console.log("Split trip:", newTripTitle, stepsToMove);
 }
 
 // Helper functions for statistics

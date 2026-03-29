@@ -29,7 +29,7 @@ async def get_location_recommendations(
     
     Example:
     - GET /api/recommendations/location?location=Tel Aviv, Israel&lat=32.0853&lon=34.7818&rec_type=restaurants&budget=moderate
-    - Returns: Personalized recommendations from Gemini AI
+    - Returns: Personalized recommendations from Claude AI
     """
     location_context = LocationContext(
         location_name=location,

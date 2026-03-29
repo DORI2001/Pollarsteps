@@ -3,21 +3,9 @@
 import React, { useState, useMemo } from "react";
 import { exportAsJSON, exportAsCSV, exportAsGeoJSON, exportAsGPX, ExportTrip } from "@/lib/export";
 import { filterTrips, TripFilter } from "@/lib/search";
-import { ThemeToggle } from "./ThemeToggle";
 
-const COLORS = {
-  primary: "#667eea",
-  primaryDark: "#764ba2",
-  secondary: "#5AC8FA",
-  background: "#F5F5F7",
-  surface: "#FFFFFF",
-  text: "#1D1D1D",
-  textSecondary: "#86868B",
-  border: "#E5E5EA",
-  success: "#34C759",
-  warning: "#FF9500",
-  error: "#FF3B30",
-};
+import { useColors } from "@/lib/theme";
+import { api, session as authSession } from "@/lib/api";
 
 interface Trip {
   id: string;
@@ -49,6 +37,7 @@ export function TripToolbar({
   onLogout,
   loading = false,
 }: TripToolbarProps) {
+  const COLORS = useColors();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [tripTitle, setTripTitle] = useState("");
   const [tripDesc, setTripDesc] = useState("");
@@ -57,6 +46,10 @@ export function TripToolbar({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareLink, setShareLink] = useState("");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [filterSettings, setFilterSettings] = useState<TripFilter>({
     searchText: "",
@@ -134,6 +127,58 @@ export function TripToolbar({
     }
   };
 
+  const handleShare = async () => {
+    if (!currentTrip) return;
+    const token = authSession.getToken();
+    if (!token) return;
+
+    setShareLoading(true);
+    setCopied(false);
+    try {
+      const result = await api.shareTrip(token, currentTrip.id);
+      const fullUrl = `${window.location.origin}/shared/${result.share_token}`;
+      setShareLink(fullUrl);
+      setShowShareModal(true);
+    } catch (err) {
+      console.error("Failed to generate share link:", err);
+      alert("Failed to generate share link");
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const input = document.createElement("input");
+      input.value = shareLink;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleRevokeShare = async () => {
+    if (!currentTrip) return;
+    const token = authSession.getToken();
+    if (!token) return;
+
+    try {
+      await api.revokeShareLink(token, currentTrip.id);
+      setShareLink("");
+      setShowShareModal(false);
+    } catch (err) {
+      console.error("Failed to revoke share link:", err);
+    }
+  };
+
   // Calculate filtered trips
   const filteredTrips = useMemo(() => {
     return filterTrips(trips, { ...filterSettings, searchText });
@@ -151,6 +196,7 @@ export function TripToolbar({
 
   return (
     <>
+      {/* Glass Morphism Header */}
       <div
         style={{
           position: "fixed",
@@ -158,9 +204,10 @@ export function TripToolbar({
           left: 0,
           right: 0,
           zIndex: 100,
-          background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`,
-          color: "white",
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+          height: "64px",
+          backdropFilter: "saturate(180%) blur(20px)",
+          background: COLORS.headerBg,
+          borderBottom: `1px solid ${COLORS.border}`,
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         }}
       >
@@ -168,47 +215,54 @@ export function TripToolbar({
           style={{
             display: "flex",
             alignItems: "center",
-            padding: "12px 20px",
+            padding: "0 20px",
             gap: "20px",
-            height: "70px",
+            height: "100%",
             justifyContent: "space-between",
           }}
         >
+          {/* Trip Title and Meta */}
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
-              ✈️ {currentTrip?.title || "No Trip Selected"}
+            <div style={{ fontSize: 17, fontWeight: 600, color: COLORS.text, marginBottom: 4 }}>
+              {currentTrip?.title || "No Trip Selected"}
             </div>
-            <div style={{ fontSize: 11, opacity: 0.85, display: "flex", gap: 14 }}>
-              <span>📅 {formattedStartDate}</span>
-              <span>🗺️ {stepCount} location{stepCount !== 1 ? "s" : ""}</span>
-              <span>⏱️ {totalDays} day{totalDays !== 1 ? "s" : ""}</span>
+            <div style={{ fontSize: 12, fontWeight: 400, color: COLORS.textSecondary, display: "flex", gap: 8, alignItems: "center" }}>
+              <span>{formattedStartDate}</span>
+              <span>·</span>
+              <span>{stepCount} location{stepCount !== 1 ? "s" : ""}</span>
+              <span>·</span>
+              <span>{totalDays} day{totalDays !== 1 ? "s" : ""}</span>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {/* Action Buttons */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Search & Filter Button */}
             <button
               onClick={() => setShowFilterModal(true)}
               style={{
-                padding: "8px 12px",
-                borderRadius: 8,
+                padding: "8px 16px",
+                borderRadius: 20,
                 border: "none",
-                background: "rgba(255, 255, 255, 0.2)",
-                color: "white",
+                background: `rgba(${COLORS.primary === "#5B6CF0" ? "91, 108, 240" : "129, 140, 248"}, 0.12)`,
+                color: COLORS.text,
                 cursor: "pointer",
-                fontSize: 14,
-                transition: "all 0.2s",
+                fontSize: 13,
+                fontWeight: 500,
+                transition: "all 0.2s ease-in-out",
               }}
               onMouseOver={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "rgba(255, 255, 255, 0.3)";
+                (e.currentTarget as HTMLButtonElement).style.background = `rgba(${COLORS.primary === "#5B6CF0" ? "91, 108, 240" : "129, 140, 248"}, 0.2)`;
               }}
               onMouseOut={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "rgba(255, 255, 255, 0.2)";
+                (e.currentTarget as HTMLButtonElement).style.background = `rgba(${COLORS.primary === "#5B6CF0" ? "91, 108, 240" : "129, 140, 248"}, 0.12)`;
               }}
               title="Search & Filter"
             >
-              🔍
+              Search
             </button>
 
+            {/* Trip Select Dropdown */}
             <select
               onChange={(e) => {
                 const trip = filteredTrips.find((t) => t.id === e.target.value);
@@ -216,113 +270,156 @@ export function TripToolbar({
               }}
               value={currentTrip?.id || ""}
               style={{
-                padding: "8px 12px",
+                padding: "8px 14px",
                 borderRadius: 8,
-                border: "none",
-                background: "rgba(255, 255, 255, 0.25)",
-                color: "white",
+                border: `1px solid ${COLORS.border}`,
+                background: COLORS.surface,
+                color: COLORS.text,
                 cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 500,
+                fontSize: 13,
+                fontWeight: 400,
+                transition: "all 0.2s ease-in-out",
               }}
             >
-              <option value="" style={{ color: COLORS.text }}>
-                Select Trip
-              </option>
+              <option value="">Select Trip</option>
               {filteredTrips.map((trip) => (
-                <option key={trip.id} value={trip.id} style={{ color: COLORS.text }}>
+                <option key={trip.id} value={trip.id}>
                   {trip.title}
                 </option>
               ))}
             </select>
 
+            {/* New Trip Button */}
             <button
               onClick={() => setShowCreateModal(true)}
               style={{
                 padding: "8px 16px",
-                borderRadius: 8,
+                borderRadius: 20,
                 border: "none",
                 background: COLORS.success,
                 color: "white",
                 cursor: "pointer",
                 fontWeight: 600,
-                fontSize: 12,
-                transition: "all 0.2s",
+                fontSize: 13,
+                transition: "all 0.2s ease-in-out",
               }}
-              onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
-              onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseOver={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = "0.85";
+              }}
+              onMouseOut={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              }}
             >
               + New Trip
             </button>
 
+            {/* Share Button */}
+            {currentTrip && (
+              <button
+                onClick={handleShare}
+                disabled={shareLoading}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 20,
+                  border: "none",
+                  background: `rgba(${COLORS.primary === "#5B6CF0" ? "91, 108, 240" : "129, 140, 248"}, 0.12)`,
+                  color: COLORS.primary,
+                  cursor: shareLoading ? "not-allowed" : "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  transition: "all 0.2s ease-in-out",
+                  opacity: shareLoading ? 0.6 : 1,
+                }}
+                onMouseOver={(e) => {
+                  if (!shareLoading) (e.currentTarget as HTMLButtonElement).style.background = `rgba(${COLORS.primary === "#5B6CF0" ? "91, 108, 240" : "129, 140, 248"}, 0.2)`;
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(${COLORS.primary === "#5B6CF0" ? "91, 108, 240" : "129, 140, 248"}, 0.12)`;
+                }}
+              >
+                {shareLoading ? "..." : "Share"}
+              </button>
+            )}
+
+            {/* Export Button */}
             {currentTrip && (
               <button
                 onClick={() => setShowExportModal(true)}
                 style={{
                   padding: "8px 16px",
-                  borderRadius: 8,
-                  border: `1px solid rgba(255, 255, 255, 0.3)`,
+                  borderRadius: 20,
+                  border: `1px solid ${COLORS.border}`,
                   background: "transparent",
-                  color: "white",
+                  color: COLORS.text,
                   cursor: "pointer",
-                  fontSize: 12,
-                  transition: "all 0.2s",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  transition: "all 0.2s ease-in-out",
                 }}
                 onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "rgba(255, 255, 255, 0.1)";
+                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.06)`;
+                  if (COLORS.text === "#F5F5F7") {
+                    (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
+                  }
                 }}
                 onMouseOut={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.background = "transparent";
                 }}
               >
-                ⬇️ Export
+                Export
               </button>
             )}
 
+            {/* Delete Button */}
             {currentTrip && onDeleteTrip && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 style={{
                   padding: "8px 16px",
-                  borderRadius: 8,
-                  border: `1px solid rgba(255, 255, 255, 0.3)`,
+                  borderRadius: 20,
+                  border: `1px solid ${COLORS.border}`,
                   background: "transparent",
-                  color: "white",
+                  color: COLORS.text,
                   cursor: "pointer",
-                  fontSize: 12,
-                  transition: "all 0.2s",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  transition: "all 0.2s ease-in-out",
                 }}
                 onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "rgba(255, 255, 255, 0.1)";
+                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.06)`;
+                  if (COLORS.text === "#F5F5F7") {
+                    (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
+                  }
                 }}
                 onMouseOut={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.background = "transparent";
                 }}
               >
-                🗑️ Delete
+                Delete
               </button>
             )}
 
-            <ThemeToggle />
-
+            {/* Sign Out Button */}
             {onLogout && (
               <button
                 onClick={onLogout}
                 style={{
                   padding: "8px 16px",
-                  borderRadius: 8,
-                  border: `1px solid rgba(255, 255, 255, 0.3)`,
+                  borderRadius: 20,
+                  border: "none",
                   background: "transparent",
-                  color: "#FFD700",
+                  color: COLORS.text,
                   cursor: "pointer",
-                  fontSize: 12,
-                  transition: "all 0.2s",
+                  fontSize: 13,
+                  fontWeight: 400,
+                  opacity: 0.7,
+                  transition: "all 0.2s ease-in-out",
                 }}
                 onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "rgba(255, 255, 255, 0.1)";
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
                 onMouseOut={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
                 }}
               >
                 Sign Out
@@ -332,12 +429,13 @@ export function TripToolbar({
         </div>
       </div>
 
+      {/* Create Trip Modal */}
       {showCreateModal && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.5)",
+            background: COLORS.overlayBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -349,43 +447,51 @@ export function TripToolbar({
           <div
             style={{
               background: COLORS.surface,
-              borderRadius: 20,
-              padding: 32,
-              maxWidth: 400,
+              borderRadius: 28,
+              padding: 36,
+              maxWidth: 420,
               width: "90%",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)",
+              animation: "scale-in 0.3s ease-out",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: COLORS.text, margin: "0 0 20px 0" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: COLORS.text, margin: "0 0 8px 0" }}>
               Create New Trip
             </h2>
+            <p style={{ fontSize: 13, fontWeight: 400, color: COLORS.textSecondary, margin: "0 0 24px 0" }}>
+              Start tracking your next adventure
+            </p>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
                 Trip Title
               </label>
               <input
                 type="text"
-                placeholder="e.g., Europe 2024"
+                placeholder="Europe 2024"
                 value={tripTitle}
                 onChange={(e) => setTripTitle(e.target.value)}
                 disabled={creatingTrip}
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
+                  background: COLORS.inputBg,
+                  color: COLORS.text,
                   fontSize: 14,
+                  fontWeight: 400,
                   boxSizing: "border-box",
+                  transition: "all 0.2s",
                   opacity: creatingTrip ? 0.6 : 1,
                 }}
               />
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
-                Description (optional)
+                Description
               </label>
               <textarea
                 placeholder="Tell us about this trip..."
@@ -394,21 +500,26 @@ export function TripToolbar({
                 disabled={creatingTrip}
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
+                  background: COLORS.inputBg,
+                  color: COLORS.text,
                   fontSize: 14,
+                  fontWeight: 400,
                   boxSizing: "border-box",
                   minHeight: "80px",
                   fontFamily: "inherit",
+                  resize: "none",
+                  transition: "all 0.2s",
                   opacity: creatingTrip ? 0.6 : 1,
                 }}
               />
             </div>
 
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 28 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
-                Start Date (optional)
+                Start Date
               </label>
               <input
                 type="date"
@@ -417,30 +528,47 @@ export function TripToolbar({
                 disabled={creatingTrip}
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
+                  background: COLORS.inputBg,
+                  color: COLORS.text,
                   fontSize: 14,
+                  fontWeight: 400,
                   boxSizing: "border-box",
+                  transition: "all 0.2s",
                   opacity: creatingTrip ? 0.6 : 1,
                 }}
               />
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 12 }}>
               <button
                 onClick={() => setShowCreateModal(false)}
                 disabled={creatingTrip}
                 style={{
                   flex: 1,
                   padding: "12px",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
                   background: "transparent",
                   color: COLORS.text,
                   cursor: creatingTrip ? "not-allowed" : "pointer",
                   fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
                   opacity: creatingTrip ? 0.6 : 1,
+                }}
+                onMouseOver={(e) => {
+                  if (!creatingTrip) {
+                    (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.05)`;
+                    if (COLORS.text === "#F5F5F7") {
+                      (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
+                    }
+                  }
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
                 }}
               >
                 Cancel
@@ -451,13 +579,23 @@ export function TripToolbar({
                 style={{
                   flex: 1,
                   padding: "12px",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   border: "none",
                   background: COLORS.primary,
                   color: "white",
                   cursor: creatingTrip ? "not-allowed" : "pointer",
                   fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
                   opacity: creatingTrip ? 0.6 : 1,
+                }}
+                onMouseOver={(e) => {
+                  if (!creatingTrip) {
+                    (e.currentTarget as HTMLButtonElement).style.opacity = "0.9";
+                  }
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
               >
                 {creatingTrip ? "Creating..." : "Create Trip"}
@@ -467,12 +605,13 @@ export function TripToolbar({
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && currentTrip && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.5)",
+            background: COLORS.overlayBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -484,33 +623,45 @@ export function TripToolbar({
           <div
             style={{
               background: COLORS.surface,
-              borderRadius: 20,
-              padding: 32,
-              maxWidth: 400,
+              borderRadius: 28,
+              padding: 36,
+              maxWidth: 380,
               width: "90%",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)",
+              animation: "scale-in 0.3s ease-out",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLORS.error, margin: "0 0 12px 0" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: COLORS.error, margin: "0 0 8px 0" }}>
               Delete Trip?
             </h2>
-            <p style={{ fontSize: 14, color: COLORS.textSecondary, margin: "0 0 24px 0" }}>
+            <p style={{ fontSize: 15, fontWeight: 400, color: COLORS.textSecondary, margin: "0 0 28px 0", lineHeight: 1.5 }}>
               Are you sure you want to delete "{currentTrip.title}"? This action cannot be undone.
             </p>
 
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 12 }}>
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 style={{
                   flex: 1,
                   padding: "12px",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
                   background: "transparent",
                   color: COLORS.text,
                   cursor: "pointer",
                   fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.05)`;
+                  if (COLORS.text === "#F5F5F7") {
+                    (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
+                  }
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
                 }}
               >
                 Cancel
@@ -520,12 +671,20 @@ export function TripToolbar({
                 style={{
                   flex: 1,
                   padding: "12px",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   border: "none",
                   background: COLORS.error,
                   color: "white",
                   cursor: "pointer",
                   fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.9";
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
               >
                 Delete
@@ -535,12 +694,13 @@ export function TripToolbar({
         </div>
       )}
 
+      {/* Export Modal */}
       {showExportModal && currentTrip && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.5)",
+            background: COLORS.overlayBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -552,19 +712,20 @@ export function TripToolbar({
           <div
             style={{
               background: COLORS.surface,
-              borderRadius: 20,
-              padding: 32,
-              maxWidth: 400,
+              borderRadius: 28,
+              padding: 36,
+              maxWidth: 420,
               width: "90%",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)",
+              animation: "scale-in 0.3s ease-out",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, margin: "0 0 12px 0" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: COLORS.text, margin: "0 0 6px 0" }}>
               Export Trip
             </h2>
-            <p style={{ fontSize: 13, color: COLORS.textSecondary, margin: "0 0 20px 0" }}>
-              Choose a format to export "{currentTrip.title}":
+            <p style={{ fontSize: 15, fontWeight: 400, color: COLORS.textSecondary, margin: "0 0 24px 0" }}>
+              Choose a format for "{currentTrip.title}"
             </p>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
@@ -572,7 +733,7 @@ export function TripToolbar({
                 onClick={() => handleExport("json")}
                 style={{
                   padding: "16px",
-                  borderRadius: 8,
+                  borderRadius: 14,
                   border: `1px solid ${COLORS.border}`,
                   background: COLORS.background,
                   color: COLORS.text,
@@ -592,7 +753,6 @@ export function TripToolbar({
                   (e.currentTarget as HTMLButtonElement).style.background = COLORS.background;
                 }}
               >
-                <span style={{ fontSize: 20 }}>📄</span>
                 JSON
               </button>
 
@@ -600,7 +760,7 @@ export function TripToolbar({
                 onClick={() => handleExport("csv")}
                 style={{
                   padding: "16px",
-                  borderRadius: 8,
+                  borderRadius: 14,
                   border: `1px solid ${COLORS.border}`,
                   background: COLORS.background,
                   color: COLORS.text,
@@ -620,7 +780,6 @@ export function TripToolbar({
                   (e.currentTarget as HTMLButtonElement).style.background = COLORS.background;
                 }}
               >
-                <span style={{ fontSize: 20 }}>📊</span>
                 CSV
               </button>
 
@@ -628,7 +787,7 @@ export function TripToolbar({
                 onClick={() => handleExport("geojson")}
                 style={{
                   padding: "16px",
-                  borderRadius: 8,
+                  borderRadius: 14,
                   border: `1px solid ${COLORS.border}`,
                   background: COLORS.background,
                   color: COLORS.text,
@@ -648,7 +807,6 @@ export function TripToolbar({
                   (e.currentTarget as HTMLButtonElement).style.background = COLORS.background;
                 }}
               >
-                <span style={{ fontSize: 20 }}>🗺️</span>
                 GeoJSON
               </button>
 
@@ -656,7 +814,7 @@ export function TripToolbar({
                 onClick={() => handleExport("gpx")}
                 style={{
                   padding: "16px",
-                  borderRadius: 8,
+                  borderRadius: 14,
                   border: `1px solid ${COLORS.border}`,
                   background: COLORS.background,
                   color: COLORS.text,
@@ -676,7 +834,6 @@ export function TripToolbar({
                   (e.currentTarget as HTMLButtonElement).style.background = COLORS.background;
                 }}
               >
-                <span style={{ fontSize: 20 }}>📍</span>
                 GPX
               </button>
             </div>
@@ -686,26 +843,161 @@ export function TripToolbar({
               style={{
                 width: "100%",
                 padding: "12px",
-                borderRadius: 8,
+                borderRadius: 12,
                 border: `1px solid ${COLORS.border}`,
                 background: "transparent",
                 color: COLORS.text,
                 cursor: "pointer",
                 fontWeight: 600,
+                fontSize: 14,
+                transition: "all 0.2s",
+              }}
+              onMouseOver={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.05)`;
+                if (COLORS.text === "#F5F5F7") {
+                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
+                }
+              }}
+              onMouseOut={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
               }}
             >
-              Cancel
+              Done
             </button>
           </div>
         </div>
       )}
 
+      {/* Share Modal */}
+      {showShareModal && shareLink && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: COLORS.overlayBg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => setShowShareModal(false)}
+        >
+          <div
+            style={{
+              background: COLORS.surface,
+              borderRadius: 28,
+              padding: 36,
+              maxWidth: 460,
+              width: "90%",
+              boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)",
+              animation: "scale-in 0.3s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: COLORS.text, margin: "0 0 8px 0" }}>
+              Share Your Trip
+            </h2>
+            <p style={{ fontSize: 14, color: COLORS.textSecondary, margin: "0 0 24px 0", lineHeight: 1.5 }}>
+              Anyone with this link can view "{currentTrip?.title}" and all its locations on the map.
+            </p>
+
+            {/* Link display */}
+            <div style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 20,
+            }}>
+              <input
+                type="text"
+                readOnly
+                value={shareLink}
+                style={{
+                  flex: 1,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${COLORS.border}`,
+                  background: COLORS.inputBg,
+                  color: COLORS.text,
+                  fontSize: 13,
+                  boxSizing: "border-box",
+                }}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <button
+                onClick={handleCopyLink}
+                style={{
+                  padding: "12px 20px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: copied ? COLORS.success : COLORS.primary,
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  transition: "all 0.2s",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={handleRevokeShare}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 12,
+                  border: `1px solid ${COLORS.error}`,
+                  background: "transparent",
+                  color: COLORS.error,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = COLORS.error;
+                  (e.currentTarget as HTMLButtonElement).style.color = "white";
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                  (e.currentTarget as HTMLButtonElement).style.color = COLORS.error;
+                }}
+              >
+                Revoke Link
+              </button>
+              <button
+                onClick={() => setShowShareModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: COLORS.primary,
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Modal */}
       {showFilterModal && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.5)",
+            background: COLORS.overlayBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -717,39 +1009,47 @@ export function TripToolbar({
           <div
             style={{
               background: COLORS.surface,
-              borderRadius: 20,
-              padding: 32,
-              maxWidth: 400,
+              borderRadius: 28,
+              padding: 36,
+              maxWidth: 420,
               width: "90%",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)",
+              animation: "scale-in 0.3s ease-out",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, margin: "0 0 20px 0" }}>
-              🔍 Search & Filter
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: COLORS.text, margin: "0 0 6px 0" }}>
+              Search & Filter
             </h2>
+            <p style={{ fontSize: 13, fontWeight: 400, color: COLORS.textSecondary, margin: "0 0 24px 0" }}>
+              Find and sort your trips
+            </p>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
-                Search Trips
+                Search
               </label>
               <input
                 type="text"
-                placeholder="Search by title or description..."
+                placeholder="Search trips..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
+                  background: COLORS.inputBg,
+                  color: COLORS.text,
                   fontSize: 14,
+                  fontWeight: 400,
                   boxSizing: "border-box",
+                  transition: "all 0.2s",
                 }}
               />
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
                 Sort By
               </label>
@@ -760,11 +1060,15 @@ export function TripToolbar({
                 }
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
+                  background: COLORS.inputBg,
+                  color: COLORS.text,
                   fontSize: 14,
+                  fontWeight: 400,
                   boxSizing: "border-box",
+                  transition: "all 0.2s",
                 }}
               >
                 <option value="date">Most Recent</option>
@@ -774,7 +1078,7 @@ export function TripToolbar({
               </select>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 28 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
                 Order
               </label>
@@ -785,11 +1089,15 @@ export function TripToolbar({
                 }
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
+                  background: COLORS.inputBg,
+                  color: COLORS.text,
                   fontSize: 14,
+                  fontWeight: 400,
                   boxSizing: "border-box",
+                  transition: "all 0.2s",
                 }}
               >
                 <option value="desc">Descending</option>
@@ -797,7 +1105,7 @@ export function TripToolbar({
               </select>
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 12 }}>
               <button
                 onClick={() => {
                   setSearchText("");
@@ -806,12 +1114,23 @@ export function TripToolbar({
                 style={{
                   flex: 1,
                   padding: "12px",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   border: `1px solid ${COLORS.border}`,
                   background: "transparent",
                   color: COLORS.text,
                   cursor: "pointer",
                   fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.05)`;
+                  if (COLORS.text === "#F5F5F7") {
+                    (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
+                  }
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
                 }}
               >
                 Reset
@@ -821,12 +1140,20 @@ export function TripToolbar({
                 style={{
                   flex: 1,
                   padding: "12px",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   border: "none",
                   background: COLORS.primary,
                   color: "white",
                   cursor: "pointer",
                   fontWeight: 600,
+                  fontSize: 14,
+                  transition: "all 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.9";
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
               >
                 Done
@@ -835,10 +1162,11 @@ export function TripToolbar({
 
             <div
               style={{
-                marginTop: 16,
+                marginTop: 20,
                 paddingTop: 16,
                 borderTop: `1px solid ${COLORS.border}`,
                 fontSize: 12,
+                fontWeight: 400,
                 color: COLORS.textSecondary,
                 textAlign: "center",
               }}
@@ -849,7 +1177,8 @@ export function TripToolbar({
         </div>
       )}
 
-      <div style={{ height: "70px" }} />
+      {/* Spacer for fixed header */}
+      <div style={{ height: "64px" }} />
     </>
   );
 }

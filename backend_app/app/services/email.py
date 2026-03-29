@@ -20,8 +20,9 @@ async def send_welcome_email(user_email: str, user_name: str) -> bool:
     try:
         settings = get_settings()
         
-        if not settings.smtp_user or not settings.smtp_password:
-            print("⚠️  Email configuration not set. Skipping email notification.")
+        if not settings.smtp_user or not settings.smtp_password or \
+           settings.smtp_user == "your-email@gmail.com" or \
+           settings.smtp_password == "your-app-password":
             return False
         
         # Run email sending in thread pool to avoid blocking
@@ -60,7 +61,7 @@ def _send_email(
     try:
         # Create message
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Welcome to Polarsteps! 🗺️"
+        msg["Subject"] = "Welcome to Pollarsteps! 🗺️"
         msg["From"] = f"{smtp_from_name} <{smtp_from_email}>"
         msg["To"] = user_email
         
@@ -73,7 +74,7 @@ def _send_email(
                     <!-- Header -->
                     <div style="text-align: center; margin-bottom: 30px;">
                         <div style="font-size: 48px; margin-bottom: 10px;">🗺️</div>
-                        <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Welcome to Polarsteps!</h1>
+                        <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Welcome to Pollarsteps!</h1>
                     </div>
                     
                     <!-- Main Content -->
@@ -83,7 +84,7 @@ def _send_email(
                         </p>
                         
                         <p style="margin: 16px 0; font-size: 15px;">
-                            Welcome to Polarsteps! We're thrilled to have you join our community of travel enthusiasts.
+                            Welcome to Pollarsteps! We're thrilled to have you join our community of travel enthusiasts.
                         </p>
                         
                         <p style="margin: 16px 0; font-size: 15px;">
@@ -111,7 +112,7 @@ def _send_email(
                     <!-- Footer -->
                     <div style="border-top: 1px solid #E5E5EA; padding-top: 20px; text-align: center; font-size: 13px; color: #86868B;">
                         <p style="margin: 5px 0;">
-                            Polarsteps - Track Your Travel Adventures
+                            Pollarsteps - Track Your Travel Adventures
                         </p>
                         <p style="margin: 5px 0;">
                             © 2026. All rights reserved.
@@ -126,7 +127,7 @@ def _send_email(
         text = f"""
         Hello {user_name},
         
-        Welcome to Polarsteps! We're thrilled to have you join our community.
+        Welcome to Pollarsteps! We're thrilled to have you join our community.
         
         Your account has been successfully created with the email {user_email}.
         You can now start tracking your trips and sharing your travel stories.
@@ -134,7 +135,7 @@ def _send_email(
         Start your journey: http://localhost:3000
         
         ---
-        Polarsteps - Track Your Travel Adventures
+        Pollarsteps - Track Your Travel Adventures
         © 2026. All rights reserved.
         """
         

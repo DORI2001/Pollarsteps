@@ -10,6 +10,13 @@ from app.services.email import send_welcome_email
 settings = get_settings()
 
 
+async def _safe_send_email(email: str, username: str):
+    try:
+        await send_welcome_email(email, username)
+    except Exception:
+        pass
+
+
 async def register(payload: RegisterRequest, session: AsyncSession) -> TokenPair:
     existing = await session.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
@@ -24,11 +31,9 @@ async def register(payload: RegisterRequest, session: AsyncSession) -> TokenPair
     await session.commit()
     await session.refresh(user)
 
-    # Send welcome email (non-blocking, don't fail if email fails)
-    try:
-        await send_welcome_email(user.email, payload.username)
-    except Exception as e:
-        print(f"Warning: Email send failed but user signup succeeded: {str(e)}")
+    # Fire-and-forget welcome email — never block signup
+    import asyncio
+    asyncio.create_task(_safe_send_email(user.email, payload.username))
 
     access = create_token(str(user.id), settings.access_token_expire_minutes)
     refresh = create_token(str(user.id), settings.refresh_token_expire_minutes)

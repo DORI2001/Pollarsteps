@@ -46,7 +46,7 @@ async def geocode_location(location_name: str) -> Optional[GeocodeResult]:
         }
         
         headers = {
-            "User-Agent": "Polarsteps/1.0 (Trip Planning App; https://github.com/user/polarsteps)",
+            "User-Agent": "Pollarsteps/1.0 (Trip Planning App; https://github.com/user/polarsteps)",
         }
         
         # Use session to make async HTTP request
@@ -129,7 +129,7 @@ async def reverse_geocode(latitude: float, longitude: float) -> Optional[str]:
         }
         
         headers = {
-            "User-Agent": "Polarsteps/1.0 (Trip Planning App; https://github.com/user/polarsteps)",
+            "User-Agent": "Pollarsteps/1.0 (Trip Planning App; https://github.com/user/polarsteps)",
         }
         
         async with aiohttp.ClientSession(headers=headers) as session:

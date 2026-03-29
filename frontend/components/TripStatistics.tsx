@@ -1,17 +1,7 @@
 "use client";
 
 import React from "react";
-
-const COLORS = {
-  primary: "#667eea",
-  primaryDark: "#764ba2",
-  background: "#F5F5F7",
-  surface: "#FFFFFF",
-  text: "#1D1D1D",
-  textSecondary: "#86868B",
-  border: "#E5E5EA",
-  success: "#34C759",
-};
+import { useColors } from "@/lib/theme";
 
 interface TripStatisticsProps {
   trip: {
@@ -39,6 +29,7 @@ const TripStatisticsContent = ({
   averageDaysPerLocation = 0,
   totalDistance = 0,
 }: TripStatisticsProps) => {
+  const COLORS = useColors();
   const stats = [
     {
       icon: "🌍",

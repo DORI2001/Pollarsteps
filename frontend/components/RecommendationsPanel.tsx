@@ -33,7 +33,7 @@ const RecommendationsPanel: React.FC<RecommendationsProps> = ({
     setError(null);
     
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("auth_token");
       if (!token) {
         setError("Not authenticated");
         return;
@@ -48,7 +48,7 @@ const RecommendationsPanel: React.FC<RecommendationsProps> = ({
       });
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/recommendations/location?${params}`,
+        `${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api"}/recommendations/location?${params}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
