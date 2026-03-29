@@ -383,7 +383,16 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
   useEffect(() => {
     if (!mapRef.current || steps.length === 0 || !fitTrigger) return;
 
-    mapRef.current.invalidateSize();
+    // Skip if container is hidden; Leaflet needs a visible element to compute positions
+    const container = mapRef.current.getContainer();
+    if (!container || container.offsetParent === null) return;
+
+    try {
+      mapRef.current.invalidateSize();
+    } catch (err) {
+      console.warn("Leaflet invalidateSize failed", err);
+      return;
+    }
 
     setTimeout(() => {
       if (!mapRef.current) return;
