@@ -7,6 +7,7 @@ from app.api.deps import get_db, get_current_user
 from app.schemas.trip import TripCreate, TripWithSteps, TripRead
 from app.services import trips as trip_service
 from app.models.trip import Trip
+from app.utils.errors import NotFoundError, check_ownership
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -27,9 +28,8 @@ async def get_trips(session: AsyncSession = Depends(get_db), current_user=Depend
 async def get_trip(trip_id: UUID, session: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     data = await trip_service.get_trip_with_steps(trip_id, session)
     if not data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-    if data.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        raise NotFoundError("Trip")
+    check_ownership(data.user_id, current_user.id, "Trip")
     return data
 
 
