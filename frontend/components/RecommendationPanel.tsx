@@ -19,6 +19,7 @@ export function RecommendationPanel({
   const [loading, setLoading] = useState(false);
   const [recType, setRecType] = useState("all");
   const [budget, setBudget] = useState("moderate");
+  const [error, setError] = useState<string | null>(null);
 
   const handleGetRecommendations = async () => {
     if (!currentLocation) {
@@ -31,6 +32,7 @@ export function RecommendationPanel({
       return;
     }
 
+    setError(null);
     setLoading(true);
     try {
       const result = await api.getRecommendations(
@@ -38,12 +40,18 @@ export function RecommendationPanel({
         currentLocation.lat,
         currentLocation.lng,
         recType,
-        budget
+        budget,
+        question
       );
+      if (!result) {
+        setError("No recommendations returned. Please try again.");
+        setRecommendations(null);
+        return;
+      }
       setRecommendations(result);
     } catch (err) {
       console.error("Failed to get recommendations:", err);
-      alert("Failed to get recommendations");
+      setError("Failed to get recommendations. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -273,6 +281,21 @@ export function RecommendationPanel({
       </button>
 
       {/* Recommendations Display */}
+      {error && (
+        <div
+          style={{
+            padding: 12,
+            background: "#fff3f3",
+            borderRadius: 8,
+            border: "1px solid #f0b3b3",
+            color: "#9b1c1c",
+            fontSize: 12,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       {recommendations && (
         <div
           style={{

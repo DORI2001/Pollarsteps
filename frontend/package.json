@@ -25,6 +25,7 @@
     "@types/react-dom": "18.2.21",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.27",
+    "playwright": "^1.58.2",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
     "typescript": "5.4.5"

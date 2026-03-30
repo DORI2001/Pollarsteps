@@ -21,3 +21,4 @@ class Trip(Base):
 
     user = relationship("User", backref="trips")
     steps = relationship("Step", back_populates="trip", cascade="all, delete-orphan", order_by="Step.timestamp")
+    stories = relationship("Story", backref="trip", cascade="all, delete-orphan", order_by="Story.created_at.desc()")

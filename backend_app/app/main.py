@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.db import engine, Base
-from app.api.routes import auth, trips, steps, ai_chronicler, analytics, uploads, geocoding, recommendations
+from app.api.routes import auth, trips, steps, ai_chronicler, analytics, uploads, geocoding, recommendations, stories
 import os
 
 # Load .env file explicitly at startup
@@ -21,12 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create uploads directory
+# Create uploads directory (used by uploads router)
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# Mount uploads directory for static file serving
-app.mount("/api/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 @app.on_event("startup")
@@ -49,3 +46,4 @@ app.include_router(ai_chronicler.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(geocoding.router, prefix="/api")
 app.include_router(recommendations.router, prefix="/api")
+app.include_router(stories.router, prefix="/api")

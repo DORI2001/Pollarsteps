@@ -3,9 +3,9 @@
 import React, { useState, useMemo } from "react";
 import { exportAsJSON, exportAsCSV, exportAsGeoJSON, exportAsGPX, ExportTrip } from "@/lib/export";
 import { filterTrips, TripFilter } from "@/lib/search";
-
 import { useColors } from "@/lib/theme";
 import { api, session as authSession } from "@/lib/api";
+import { StoryReelModal } from "@/components/StoryReelModal";
 
 interface Trip {
   id: string;
@@ -50,6 +50,7 @@ export function TripToolbar({
   const [shareLink, setShareLink] = useState("");
   const [shareLoading, setShareLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showStoryModal, setShowStoryModal] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [filterSettings, setFilterSettings] = useState<TripFilter>({
     searchText: "",
@@ -71,7 +72,7 @@ export function TripToolbar({
       setStartDate("");
       setShowCreateModal(false);
     } catch (error) {
-      alert("Failed to create trip");
+      alert("Failed to create trip. Please make sure you are signed in.");
     } finally {
       setCreatingTrip(false);
     }
@@ -165,6 +166,7 @@ export function TripToolbar({
     }
   };
 
+
   const handleRevokeShare = async () => {
     if (!currentTrip) return;
     const token = authSession.getToken();
@@ -178,6 +180,7 @@ export function TripToolbar({
       console.error("Failed to revoke share link:", err);
     }
   };
+
 
   // Calculate filtered trips
   const filteredTrips = useMemo(() => {
@@ -341,6 +344,32 @@ export function TripToolbar({
               </button>
             )}
 
+            {/* Create Reel Button */}
+            {currentTrip && (
+              <button
+                onClick={() => setShowStoryModal(true)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 20,
+                  border: "none",
+                  background: COLORS.secondary,
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  transition: "all 0.2s ease-in-out",
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.9";
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+                }}
+              >
+                🎬 Create Reel
+              </button>
+            )}
+
             {/* Export Button */}
             {currentTrip && (
               <button
@@ -428,6 +457,14 @@ export function TripToolbar({
           </div>
         </div>
       </div>
+
+      {/* Story Reel Modal */}
+      {showStoryModal && currentTrip && (
+        <StoryReelModal
+          trip={currentTrip}
+          onClose={() => setShowStoryModal(false)}
+        />
+      )}
 
       {/* Create Trip Modal */}
       {showCreateModal && (
@@ -1047,6 +1084,57 @@ export function TripToolbar({
                   transition: "all 0.2s",
                 }}
               />
+            </div>
+
+            {/* Live search results */}
+            <div
+              style={{
+                maxHeight: 240,
+                overflowY: "auto",
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: 14,
+                marginBottom: 20,
+                padding: 8,
+                background: COLORS.surface,
+              }}
+            >
+              {filteredTrips.length === 0 ? (
+                <div style={{ padding: 12, color: COLORS.textSecondary, fontSize: 13 }}>
+                  No trips match "{searchText}"
+                </div>
+              ) : (
+                filteredTrips.map((trip) => (
+                  <button
+                    key={trip.id}
+                    onClick={() => {
+                      onSelectTrip(trip);
+                      setShowFilterModal(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "10px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: COLORS.text,
+                      cursor: "pointer",
+                      borderRadius: 10,
+                      transition: "all 0.15s",
+                    }}
+                    onMouseOver={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = COLORS.inputBg;
+                    }}
+                    onMouseOut={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{trip.title}</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                      {(trip.steps?.length || 0)} locations · {trip.total_distance || 0} km
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
 
             <div style={{ marginBottom: 20 }}>

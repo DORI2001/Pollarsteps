@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     refresh_token_expire_minutes: int = 60 * 24 * 7
     ai_chronicler_url: Optional[str] = None
     
-    # Anthropic Claude API configuration for recommendations
+    # Gemini API configuration for recommendations
+    gemini_api_key: Optional[str] = None
+    # Legacy Anthropic key (ignored but allowed to avoid env validation errors)
     anthropic_api_key: Optional[str] = None
     
     # Email configuration

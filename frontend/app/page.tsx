@@ -535,7 +535,11 @@ function HomeContent({
     startDate: string
   ) => {
     const token = session.getToken();
-    if (!token) return;
+    if (!token) {
+      alert("Please sign in to create a trip.");
+      window.location.href = "/signin";
+      return;
+    }
 
     try {
       const trip = await api.createTrip(

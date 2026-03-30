@@ -33,7 +33,8 @@ export default function SignIn() {
 
     try {
       const tokens = await api.login(emailOrUsername.trim(), password);
-      session.setToken(tokens.access_token);
+      // Persist both access and refresh tokens so auto-refresh can work
+      session.setTokens(tokens.access_token, tokens.refresh_token);
 
       // Fetch and store user info
       const user = await api.getCurrentUser(tokens.access_token);

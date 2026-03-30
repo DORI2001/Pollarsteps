@@ -10,6 +10,53 @@ interface StepModalProps {
   onSubmit: (note: string, imageUrl?: string, locationName?: string) => Promise<void>;
 }
 
+// Compress image client-side using Canvas API before uploading
+async function compressImage(file: File, maxDimension = 1600, quality = 0.82): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let { width, height } = img;
+
+      // Scale down if either dimension exceeds the max
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      } else {
+        // Already small enough — return original file unchanged
+        resolve(file);
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          // Keep a .jpg extension so the server knows the MIME type
+          const name = file.name.replace(/\.[^.]+$/, ".jpg");
+          resolve(new File([blob], name, { type: "image/jpeg", lastModified: Date.now() }));
+        },
+        "image/jpeg",
+        quality
+      );
+    };
+
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+    img.src = objectUrl;
+  });
+}
+
 export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
   const COLORS = useColors();
   const [locationName, setLocationName] = useState("");
@@ -25,7 +72,13 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
     setError("");
 
     try {
-      const url = await api.uploadImage(file);
+      // Compress before uploading — resizes to max 1600px, ~82% JPEG quality
+      const compressed = await compressImage(file);
+      const sizeBefore = (file.size / 1024).toFixed(0);
+      const sizeAfter = (compressed.size / 1024).toFixed(0);
+      console.log(`[Image] ${sizeBefore}KB → ${sizeAfter}KB`);
+
+      const url = await api.uploadImage(compressed);
       setImageUrl(url);
     } catch (err: any) {
       const message =
@@ -180,7 +233,7 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
               <p style={{ fontSize: 13, fontWeight: 600, color: COLORS.text, margin: "0 0 4px 0" }}>
                 {loading ? "Uploading..." : "Drop image or click to select"}
               </p>
-              <p style={{ fontSize: 12, color: COLORS.textSecondary, margin: 0 }}>PNG, JPG, GIF up to 4MB</p>
+              <p style={{ fontSize: 12, color: COLORS.textSecondary, margin: 0 }}>PNG, JPG up to 10MB · auto-compressed</p>
               <input type="file" accept="image/*" onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])} style={{ display: "none" }} disabled={loading} />
             </label>
           )}

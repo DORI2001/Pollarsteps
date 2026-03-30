@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -53,7 +53,7 @@ async function getLocationName(lat: number, lng: number): Promise<string> {
 function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token, fitTrigger }: TripViewerLeafletProps) {
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<(L.Marker | L.Polyline)[]>([]);
-  const containerId = "leaflet-map-container";
+  const containerRef = useRef<HTMLDivElement>(null);
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -64,17 +64,17 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
   } | null>(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
 
-  // Memoize the click handler
-  const memoizedOnMapClick = useCallback(
-    (coords: { lat: number; lng: number }) => {
-      onMapClick(coords);
-    },
-    [onMapClick]
-  );
+  // Keep click handler in a ref so the map init effect never needs to re-run
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
 
   // Handle edit step
   const handleEditStep = async (updates: any) => {
     if (!selectedStep) return;
+    if (!token) {
+      alert("Please sign in again to edit a location.");
+      return;
+    }
     setEditLoading(true);
     try {
       await api.updateStep(token, selectedStep.id, updates);
@@ -96,6 +96,10 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
 
   // Handle delete step
   const handleDeleteStep = async (stepId: string) => {
+    if (!token) {
+      alert("Please sign in again to delete a location.");
+      return;
+    }
     if (!confirm("Are you sure you want to delete this location?")) return;
     
     try {
@@ -126,58 +130,55 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
     }
   };
 
-  // Initialize map only once (mount)
+  // Initialize map exactly once — empty deps so it never re-runs
   useEffect(() => {
-    if (mapRef.current || typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
 
-    const container = document.getElementById(containerId);
-    if (!container) {
-      console.warn(`Map container ${containerId} not found`);
-      return;
-    }
+    // Defer past the paint cycle so the container is fully in the DOM
+    const timer = setTimeout(() => {
+      if (mapRef.current) return;
 
-    // Determine initial map center and zoom level
-    let initialCenter: [number, number] = [20, 0];
-    let initialZoom = 4;
+      const container = containerRef.current;
+      if (!container) return;
 
-    if (steps && steps.length > 0) {
-      // If there are steps, center on the last (most recent) location
-      const lastStep = steps[steps.length - 1];
-      initialCenter = [lastStep.lat, lastStep.lng];
-      initialZoom = 13; // Good zoom level for city/area view
-    }
+      // Clear any stale Leaflet state from a previous React mount
+      if ((container as any)._leaflet_id) {
+        delete (container as any)._leaflet_id;
+      }
 
-    const map = L.map(containerId).setView(initialCenter, initialZoom);
+      let initialCenter: [number, number] = [20, 0];
+      let initialZoom = 4;
+      if (steps.length > 0) {
+        const lastStep = steps[steps.length - 1];
+        initialCenter = [lastStep.lat, lastStep.lng];
+        initialZoom = 13;
+      }
 
-    // Try multiple tile providers for better reliability
-    const tileLayer = L.tileLayer(
-      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png?lang=en",
-      {
+      const map = L.map(container).setView(initialCenter, initialZoom);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
         minZoom: 1,
-      }
-    );
+      }).addTo(map);
 
-    tileLayer.addTo(map);
+      mapRef.current = map;
 
-    mapRef.current = map;
-
-    // Add click handler
-    map.on("click", (e) => {
-      memoizedOnMapClick({ lat: e.latlng.lat, lng: e.latlng.lng });
-    });
-
+      // Use the ref so the click handler is always current without re-running this effect
+      map.on("click", (e) => {
+        onMapClickRef.current({ lat: e.latlng.lat, lng: e.latlng.lng });
+      });
+    }, 0);
 
     return () => {
-      // Cleanup on unmount
+      clearTimeout(timer);
       if (mapRef.current) {
         mapRef.current.off();
         mapRef.current.remove();
         mapRef.current = null;
       }
     };
-  }, [memoizedOnMapClick]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update markers when steps change
   useEffect(() => {
@@ -308,25 +309,35 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
       }
 
       // Attach event listeners for buttons in the popup
-      marker.on('popupopen', () => {
-        // Use timeout to ensure DOM is ready
-        setTimeout(() => {
-          const editBtn = document.querySelector(`.edit-step-btn[data-step-id="${step.id}"]`);
-          const deleteBtn = document.querySelector(`.delete-step-btn[data-step-id="${step.id}"]`);
+      marker.on('popupopen', (e) => {
+        try {
+          const popup = e.popup;
+          if (!popup) return;
           
-          if (editBtn) {
-            editBtn.addEventListener('click', () => {
-              setSelectedStep(step);
-              setShowEditModal(true);
-            });
-          }
-          
-          if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => {
-              handleDeleteStep(step.id);
-            });
-          }
-        }, 0);
+          // Use requestAnimationFrame to ensure DOM is ready
+          requestAnimationFrame(() => {
+            const popupEl = popup.getElement?.();
+            if (!popupEl) return;
+            
+            const editBtn = popupEl.querySelector(`.edit-step-btn[data-step-id="${step.id}"]`);
+            const deleteBtn = popupEl.querySelector(`.delete-step-btn[data-step-id="${step.id}"]`);
+
+            if (editBtn) {
+              editBtn.addEventListener('click', () => {
+                setSelectedStep(step);
+                setShowEditModal(true);
+              }, { once: true });
+            }
+
+            if (deleteBtn) {
+              deleteBtn.addEventListener('click', () => {
+                handleDeleteStep(step.id);
+              }, { once: true });
+            }
+          });
+        } catch (err) {
+          console.error("Error handling popup open:", err);
+        }
       });
 
       layersRef.current.push(marker);
@@ -384,7 +395,7 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
     if (!mapRef.current || steps.length === 0 || !fitTrigger) return;
 
     // Skip if container is hidden; Leaflet needs a visible element to compute positions
-    const container = mapRef.current.getContainer();
+    const container = containerRef.current;
     if (!container || container.offsetParent === null) return;
 
     try {
@@ -419,7 +430,7 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
         />
       )}
       <div
-        id={containerId}
+        ref={containerRef}
         style={{
           position: "absolute",
           top: 0,

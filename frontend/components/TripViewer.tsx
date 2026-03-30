@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import TripViewerLeaflet from "./TripViewerLeaflet";
+import dynamic from "next/dynamic";
 import { useColors } from "@/lib/theme";
 
 type Step = {
@@ -21,6 +21,9 @@ type TripViewerProps = {
   onStepsChange?: (updatedSteps: Step[]) => void;
   fitTrigger?: number;
 };
+
+// Leaflet depends on the browser `window`; load it client-side only
+const TripViewerLeaflet = dynamic(() => import("./TripViewerLeaflet"), { ssr: false });
 
 const TripViewerComponent: React.FC<TripViewerProps> = ({ steps, onMapClick, tripId, token, onStepsChange, fitTrigger }) => {
   const COLORS = useColors();

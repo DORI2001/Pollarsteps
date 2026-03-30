@@ -7,6 +7,7 @@ import {
   Trip,
   Step,
   User,
+  Story,
   ShareLinkResponse,
   LocationRecommendations,
 } from "./types";
@@ -80,10 +81,6 @@ const validateEmail = (email: string): boolean => {
 
 const validatePassword = (password: string): boolean => {
   return !!(password && password.length >= 6);
-};
-
-const validateCoordinates = (lat: number, lng: number): boolean => {
-  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 };
 
 const validateCoordinates = (lat: number, lng: number): boolean => {

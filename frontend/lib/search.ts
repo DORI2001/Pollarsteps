@@ -11,6 +11,9 @@ export interface AdvancedTripFilter extends TripFilter {
   sortOrder?: "asc" | "desc";
 }
 
+// Re-export TripFilter from types so it can be imported from here
+export type { TripFilter } from "./types";
+
 /**
  * Filter and search trips based on criteria.
  * @param trips - Array of trips to filter
@@ -71,8 +74,8 @@ export function filterTrips(
       compareA = a.title.localeCompare(b.title);
       compareB = b.title.localeCompare(a.title);
     } else if (sortBy === "date") {
-      compareA = new Date(a.created_at).getTime();
-      compareB = new Date(b.created_at).getTime();
+      compareA = new Date(a.created_at || 0).getTime();
+      compareB = new Date(b.created_at || 0).getTime();
     } else if (sortBy === "distance") {
       compareA = a.total_distance || 0;
       compareB = b.total_distance || 0;

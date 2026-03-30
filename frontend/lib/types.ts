@@ -24,14 +24,14 @@ export interface Step {
 
 export interface Trip {
   id: string;
-  user_id: string;
+  user_id?: string;
   title: string;
   description?: string;
-  start_date: string;
+  start_date?: string;
   end_date?: string;
   is_public?: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   total_distance?: number;
   total_steps?: number;
   steps?: Step[];
@@ -76,11 +76,35 @@ export interface TripFilter {
     start: string;
     end: string;
   };
+  sortBy?: "name" | "date" | "distance" | "locations";
+  sortOrder?: "asc" | "desc";
 }
 
 export interface ShareLinkResponse {
   share_token: string;
   share_url: string;
+}
+
+export interface StorySlide {
+  id: string;
+  story_id: string;
+  order_index: number;
+  image_url?: string;
+  caption?: string;
+  map_tile_url?: string;
+  duration_ms: number;
+}
+
+export interface Story {
+  id: string;
+  trip_id: string;
+  status: string;
+  is_public: boolean;
+  share_token?: string;
+  song_title?: string;
+  song_duration?: number;
+  slides: StorySlide[];
+  created_at: string;
 }
 
 export interface APIError {

@@ -16,7 +16,14 @@ async def upload_image(file: UploadFile = File(...)):
     """Upload an image with size and type validation"""
     
     # Validate file type
-    ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    ALLOWED_TYPES = [
+        "image/jpeg",
+        "image/jpg",
+        "image/pjpeg",  # some browsers send progressive JPEG as pjpeg
+        "image/png",
+        "image/gif",
+        "image/webp",
+    ]
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

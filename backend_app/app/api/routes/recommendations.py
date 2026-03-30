@@ -23,6 +23,7 @@ async def get_location_recommendations(
     lon: float = Query(..., description="Longitude"),
     rec_type: str = Query("all", description="Type: all, restaurants, attractions, activities"),
     budget: str = Query("moderate", description="Budget: budget, moderate, luxury"),
+    question: Optional[str] = Query(None, description="Optional traveler question to guide the recommendations"),
 ):
     """
     Get AI-powered recommendations for a location.
@@ -35,13 +36,15 @@ async def get_location_recommendations(
         location_name=location,
         latitude=lat,
         longitude=lon,
-        country="Unknown"
+        country="Unknown",
+        user_question=question,
     )
     
     return await get_recommendations(
         location_context,
         recommendation_type=rec_type,
-        budget=budget
+        budget=budget,
+        user_question=question,
     )
 
 

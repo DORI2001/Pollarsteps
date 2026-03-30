@@ -48,8 +48,9 @@ export default function SignUp() {
     }
 
     try {
-      const tokens = await api.register(email.trim(), password, username.trim());
-      session.setToken(tokens.access_token);
+        const tokens = await api.register(email.trim(), password, username.trim());
+        // Persist both access and refresh tokens so auto-refresh can work
+        session.setTokens(tokens.access_token, tokens.refresh_token);
 
       // Fetch and store user info
       const user = await api.getCurrentUser(tokens.access_token);
