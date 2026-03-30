@@ -8,7 +8,7 @@ Add locations as you go, attach photos, get AI-powered recommendations, and shar
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+
 
 </div>
 
