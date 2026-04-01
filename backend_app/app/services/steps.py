@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.models.step import Step
@@ -15,13 +16,29 @@ async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession) ->
     if not trip:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
 
-    # Idempotent check
+    # Idempotent check by client_uuid
     existing = await session.execute(
         select(Step).where(Step.trip_id == trip_id_str, Step.client_uuid == str(payload.client_uuid))
+        .options(selectinload(Step.images))
     )
     step = existing.scalar_one_or_none()
     if step:
         return StepRead.model_validate(step)
+
+    # Duplicate proximity check: reject if another step is within ~100m (0.001 degrees)
+    PROXIMITY = 0.001
+    nearby = await session.execute(
+        select(Step).where(
+            Step.trip_id == trip_id_str,
+            Step.lat.between(payload.lat - PROXIMITY, payload.lat + PROXIMITY),
+            Step.lng.between(payload.lng - PROXIMITY, payload.lng + PROXIMITY),
+        )
+    )
+    if nearby.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A step already exists very close to this location on this trip",
+        )
 
     ts = payload.timestamp or datetime.now(timezone.utc)
     step = Step(
@@ -38,7 +55,11 @@ async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession) ->
     )
     session.add(step)
     await session.commit()
-    await session.refresh(step)
+    # Reload with images eagerly to avoid lazy-load greenlet error
+    result = await session.execute(
+        select(Step).where(Step.id == step.id).options(selectinload(Step.images))
+    )
+    step = result.scalar_one()
     return StepRead.model_validate(step)
 
 
@@ -62,7 +83,10 @@ async def update_step(step_id: UUID, payload: StepUpdate, session: AsyncSession,
         step.duration_days = payload.duration_days
     
     await session.commit()
-    await session.refresh(step)
+    result = await session.execute(
+        select(Step).where(Step.id == step_id_str).options(selectinload(Step.images))
+    )
+    step = result.scalar_one()
     return StepRead.model_validate(step)
 
 

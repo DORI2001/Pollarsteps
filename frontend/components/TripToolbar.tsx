@@ -13,8 +13,10 @@ interface Trip {
   description?: string;
   start_date?: string;
   end_date?: string;
+  created_at?: string;
   total_days_travelled?: number;
   steps?: any[];
+  total_steps?: number;
   total_distance?: number;
 }
 
@@ -22,8 +24,9 @@ interface TripToolbarProps {
   trips: Trip[];
   currentTrip: Trip | null;
   onSelectTrip: (trip: Trip) => void;
-  onCreateTrip: (title: string, description: string, startDate: string) => Promise<void>;
+  onCreateTrip: (title: string, description: string, startDate: string, endDate?: string) => Promise<void>;
   onDeleteTrip?: (tripId: string) => Promise<void>;
+  onUpdateTrip?: (trip: any) => void;
   onLogout?: () => void;
   loading?: boolean;
 }
@@ -34,6 +37,7 @@ export function TripToolbar({
   onSelectTrip,
   onCreateTrip,
   onDeleteTrip,
+  onUpdateTrip,
   onLogout,
   loading = false,
 }: TripToolbarProps) {
@@ -57,6 +61,18 @@ export function TripToolbar({
     sortBy: "date",
     sortOrder: "desc",
   });
+  const [endDate, setEndDate] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsCurrentPw, setSettingsCurrentPw] = useState("");
+  const [settingsNewPw, setSettingsNewPw] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState("");
 
   const handleCreateTrip = async () => {
     if (!tripTitle.trim()) {
@@ -66,10 +82,11 @@ export function TripToolbar({
 
     setCreatingTrip(true);
     try {
-      await onCreateTrip(tripTitle, tripDesc, startDate);
+      await onCreateTrip(tripTitle, tripDesc, startDate, endDate);
       setTripTitle("");
       setTripDesc("");
       setStartDate("");
+      setEndDate("");
       setShowCreateModal(false);
     } catch (error) {
       alert("Failed to create trip. Please make sure you are signed in.");
@@ -182,6 +199,61 @@ export function TripToolbar({
   };
 
 
+  const handleEditOpen = () => {
+    if (!currentTrip) return;
+    setEditTitle(currentTrip.title || "");
+    setEditDesc(currentTrip.description || "");
+    setEditStartDate(currentTrip.start_date || "");
+    setEditEndDate(currentTrip.end_date || "");
+    setShowEditModal(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!currentTrip) return;
+    const token = authSession.getToken();
+    if (!token) return;
+    setEditSaving(true);
+    try {
+      const updated = await api.updateTrip(token, currentTrip.id, {
+        title: editTitle.trim() || undefined,
+        description: editDesc.trim() || undefined,
+        start_date: editStartDate || undefined,
+        end_date: editEndDate || undefined,
+      });
+      onUpdateTrip?.(updated);
+      setShowEditModal(false);
+    } catch (err) {
+      alert("Failed to update trip");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!settingsCurrentPw || !settingsNewPw) {
+      setSettingsMsg("Both fields are required");
+      return;
+    }
+    if (settingsNewPw.length < 6) {
+      setSettingsMsg("New password must be at least 6 characters");
+      return;
+    }
+    const token = authSession.getToken();
+    if (!token) return;
+    setSettingsSaving(true);
+    setSettingsMsg("");
+    try {
+      await api.changePassword(token, settingsCurrentPw, settingsNewPw);
+      setSettingsMsg("Password changed successfully!");
+      setSettingsCurrentPw("");
+      setSettingsNewPw("");
+    } catch (err: any) {
+      setSettingsMsg(err?.message || "Failed to change password");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   // Calculate filtered trips
   const filteredTrips = useMemo(() => {
     return filterTrips(trips, { ...filterSettings, searchText });
@@ -239,7 +311,7 @@ export function TripToolbar({
           </div>
 
           {/* Action Buttons */}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="toolbar-actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {/* Search & Filter Button */}
             <button
               onClick={() => setShowFilterModal(true)}
@@ -399,6 +471,31 @@ export function TripToolbar({
               </button>
             )}
 
+            {/* Edit Trip Button */}
+            {currentTrip && (
+              <button
+                onClick={handleEditOpen}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 20,
+                  border: `1px solid ${COLORS.border}`,
+                  background: "transparent",
+                  color: COLORS.text,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  transition: "all 0.2s ease-in-out",
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0,0,0,0.06)`;
+                  if (COLORS.text === "#F5F5F7") (e.currentTarget as HTMLButtonElement).style.background = `rgba(255,255,255,0.1)`;
+                }}
+                onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+              >
+                Edit
+              </button>
+            )}
+
             {/* Delete Button */}
             {currentTrip && onDeleteTrip && (
               <button
@@ -427,6 +524,27 @@ export function TripToolbar({
                 Delete
               </button>
             )}
+
+            {/* Settings Button */}
+            <button
+              onClick={() => { setShowSettingsModal(true); setSettingsMsg(""); }}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 20,
+                border: `1px solid ${COLORS.border}`,
+                background: "transparent",
+                color: COLORS.text,
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 500,
+                opacity: 0.7,
+                transition: "all 0.2s ease-in-out",
+              }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; }}
+            >
+              Settings
+            </button>
 
             {/* Sign Out Button */}
             {onLogout && (
@@ -554,29 +672,55 @@ export function TripToolbar({
               />
             </div>
 
-            <div style={{ marginBottom: 28 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                disabled={creatingTrip}
-                style={{
-                  width: "100%",
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: `1px solid ${COLORS.border}`,
-                  background: COLORS.inputBg,
-                  color: COLORS.text,
-                  fontSize: 14,
-                  fontWeight: 400,
-                  boxSizing: "border-box",
-                  transition: "all 0.2s",
-                  opacity: creatingTrip ? 0.6 : 1,
-                }}
-              />
+            <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  disabled={creatingTrip}
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: `1px solid ${COLORS.border}`,
+                    background: COLORS.inputBg,
+                    color: COLORS.text,
+                    fontSize: 14,
+                    fontWeight: 400,
+                    boxSizing: "border-box",
+                    transition: "all 0.2s",
+                    opacity: creatingTrip ? 0.6 : 1,
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  disabled={creatingTrip}
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: `1px solid ${COLORS.border}`,
+                    background: COLORS.inputBg,
+                    color: COLORS.text,
+                    fontSize: 14,
+                    fontWeight: 400,
+                    boxSizing: "border-box",
+                    transition: "all 0.2s",
+                    opacity: creatingTrip ? 0.6 : 1,
+                  }}
+                />
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: 12 }}>
@@ -1130,7 +1274,7 @@ export function TripToolbar({
                   >
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{trip.title}</div>
                     <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                      {(trip.steps?.length || 0)} locations · {trip.total_distance || 0} km
+                      {(trip.total_steps ?? trip.steps?.length ?? 0)} locations · {trip.total_distance || 0} km
                     </div>
                   </button>
                 ))
@@ -1260,6 +1404,97 @@ export function TripToolbar({
               }}
             >
               Showing {filteredTrips.length} of {trips.length} trip{trips.length !== 1 ? "s" : ""}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Trip Modal */}
+      {showEditModal && currentTrip && (
+        <div style={{ position: "fixed", inset: 0, background: COLORS.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}
+          onClick={() => setShowEditModal(false)}>
+          <div style={{ background: COLORS.surface, borderRadius: 28, padding: 36, maxWidth: 420, width: "90%", boxShadow: "0 25px 50px rgba(0,0,0,0.15)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: COLORS.text, margin: "0 0 6px 0" }}>Edit Trip</h2>
+            <p style={{ fontSize: 13, color: COLORS.textSecondary, margin: "0 0 24px 0" }}>Update your trip details</p>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>Title</label>
+              <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.inputBg, color: COLORS.text, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>Description</label>
+              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.inputBg, color: COLORS.text, fontSize: 14, boxSizing: "border-box", minHeight: 72, resize: "none", fontFamily: "inherit" }} />
+            </div>
+
+            <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>Start Date</label>
+                <input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.inputBg, color: COLORS.text, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>End Date</label>
+                <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.inputBg, color: COLORS.text, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowEditModal(false)} disabled={editSaving}
+                style={{ flex: 1, padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.text, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+                Cancel
+              </button>
+              <button onClick={handleEditSave} disabled={editSaving || !editTitle.trim()}
+                style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: COLORS.primary, color: "white", cursor: editSaving ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14, opacity: editSaving ? 0.6 : 1 }}>
+                {editSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div style={{ position: "fixed", inset: 0, background: COLORS.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}
+          onClick={() => setShowSettingsModal(false)}>
+          <div style={{ background: COLORS.surface, borderRadius: 28, padding: 36, maxWidth: 380, width: "90%", boxShadow: "0 25px 50px rgba(0,0,0,0.15)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: COLORS.text, margin: "0 0 6px 0" }}>Settings</h2>
+            <p style={{ fontSize: 13, color: COLORS.textSecondary, margin: "0 0 24px 0" }}>Change your password</p>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>Current Password</label>
+              <input type="password" value={settingsCurrentPw} onChange={(e) => setSettingsCurrentPw(e.target.value)}
+                placeholder="Enter current password"
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.inputBg, color: COLORS.text, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.text }}>New Password</label>
+              <input type="password" value={settingsNewPw} onChange={(e) => setSettingsNewPw(e.target.value)}
+                placeholder="At least 6 characters"
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.inputBg, color: COLORS.text, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+
+            {settingsMsg && (
+              <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: settingsMsg.includes("success") ? `${COLORS.success}20` : `${COLORS.error}15`, color: settingsMsg.includes("success") ? COLORS.success : COLORS.error, fontSize: 13 }}>
+                {settingsMsg}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowSettingsModal(false)}
+                style={{ flex: 1, padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.text, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+                Close
+              </button>
+              <button onClick={handleChangePassword} disabled={settingsSaving}
+                style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: COLORS.primary, color: "white", cursor: settingsSaving ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14, opacity: settingsSaving ? 0.6 : 1 }}>
+                {settingsSaving ? "Saving..." : "Change Password"}
+              </button>
             </div>
           </div>
         </div>

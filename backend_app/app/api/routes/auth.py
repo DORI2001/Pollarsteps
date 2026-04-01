@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenPair
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenPair, ChangePasswordRequest
 from app.schemas.user import UserRead
-from app.services.auth import register, login, refresh_auth_token
+from app.services.auth import register, login, refresh_auth_token, change_password
 from app.api.deps import get_db, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,3 +32,13 @@ async def refresh_token(payload: RefreshTokenRequest):
 @router.get("/me", response_model=UserRead)
 async def me(current_user=Depends(get_current_user)):
     return UserRead.model_validate(current_user)
+
+
+@router.patch("/me/password")
+async def change_password_endpoint(
+    payload: ChangePasswordRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    await change_password(str(current_user.id), payload.current_password, payload.new_password, session)
+    return {"message": "Password changed successfully"}

@@ -2,9 +2,10 @@
 Recommendations API Routes
 Provides endpoints for getting AI-powered recommendations by location
 """
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_current_user
+from app.utils.rate_limit import check_recommendations_limit
 from app.services.recommendations import (
     get_recommendations,
     get_recommendations_for_step,
@@ -18,12 +19,14 @@ router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 @router.get("/location", response_model=Optional[RecommendationResponse])
 async def get_location_recommendations(
+    request: Request,
     location: str = Query(..., description="Location name (e.g., 'Tel Aviv, Israel')"),
     lat: float = Query(..., description="Latitude"),
     lon: float = Query(..., description="Longitude"),
     rec_type: str = Query("all", description="Type: all, restaurants, attractions, activities"),
     budget: str = Query("moderate", description="Budget: budget, moderate, luxury"),
     question: Optional[str] = Query(None, description="Optional traveler question to guide the recommendations"),
+    _: None = Depends(check_recommendations_limit),
 ):
     """
     Get AI-powered recommendations for a location.

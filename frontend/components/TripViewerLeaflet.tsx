@@ -54,9 +54,11 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<(L.Marker | L.Polyline)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+  const [isSatellite, setIsSatellite] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<{
     name: string;
     lat: number;
@@ -156,11 +158,12 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
 
       const map = L.map(container).setView(initialCenter, initialZoom);
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      const tile = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
         minZoom: 1,
       }).addTo(map);
+      tileLayerRef.current = tile;
 
       mapRef.current = map;
 
@@ -454,6 +457,47 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
           token={token}
         />
       </div>
+
+      {/* Map Style Toggle */}
+      <button
+        onClick={() => {
+          if (!mapRef.current || !tileLayerRef.current) return;
+          mapRef.current.removeLayer(tileLayerRef.current);
+          const next = !isSatellite;
+          const newTile = next
+            ? L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+                attribution: "Tiles © Esri",
+                maxZoom: 18,
+                minZoom: 1,
+              })
+            : L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19,
+                minZoom: 1,
+              });
+          newTile.addTo(mapRef.current);
+          tileLayerRef.current = newTile;
+          setIsSatellite(next);
+        }}
+        style={{
+          position: "absolute",
+          bottom: 24,
+          left: 16,
+          zIndex: 100,
+          padding: "8px 14px",
+          borderRadius: 10,
+          border: "none",
+          background: "rgba(255,255,255,0.92)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          cursor: "pointer",
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#333",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        {isSatellite ? "Map" : "Satellite"}
+      </button>
 
       {/* Recommendations Panel - Top Right */}
       {showRecommendations && selectedLocation && (

@@ -52,22 +52,31 @@ async def login(payload: LoginRequest, session: AsyncSession) -> TokenPair:
     return TokenPair(access_token=access, refresh_token=refresh)
 
 
+async def change_password(user_id: str, current_password: str, new_password: str, session: AsyncSession) -> None:
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not verify_password(current_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+    user.password_hash = hash_password(new_password)
+    await session.commit()
+
+
 async def refresh_auth_token(refresh_token: str) -> TokenPair:
-    """Generate new access token using refresh token"""
+    """Generate new access token and rotate refresh token."""
     try:
         payload = decode_token(refresh_token)
         if not payload:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-        
+
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
-        
-        # Create new access token
+
+        # Rotate: issue a fresh access token AND a fresh refresh token
         new_access = create_token(user_id, settings.access_token_expire_minutes)
-        # Keep the same refresh token
-        return TokenPair(access_token=new_access, refresh_token=refresh_token)
+        new_refresh = create_token(user_id, settings.refresh_token_expire_minutes)
+        return TokenPair(access_token=new_access, refresh_token=new_refresh)
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token refresh failed")

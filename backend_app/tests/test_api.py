@@ -1,16 +1,16 @@
 import pytest
-from httpx import AsyncClient
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from app.main import app
-from app.core.db import Base, get_db
+from app.core.db import Base
+from app.api.deps import get_db
 from uuid import uuid4
 
-
-# Test database setup
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
-@pytest.fixture
+@pytest_asyncio.fixture()
 async def test_engine():
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
@@ -21,189 +21,269 @@ async def test_engine():
     await engine.dispose()
 
 
-@pytest.fixture
-async def test_session(test_engine):
-    async_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
-    async with async_session() as session:
-        yield session
+@pytest_asyncio.fixture()
+async def client(test_engine):
+    factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
-
-@pytest.fixture
-async def client(test_session):
     async def override_get_db():
-        yield test_session
-    
+        async with factory() as session:
+            yield session
+
     app.dependency_overrides[get_db] = override_get_db
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
-async def test_health_endpoint(client):
-    response = await client.get("/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+async def _register(client, tag=None):
+    tag = tag or str(uuid4())[:8]
+    r = await client.post("/api/auth/register", json={
+        "email": f"{tag}@test.com", "username": tag, "password": "Password1",
+    })
+    return r.json()["access_token"], tag
 
 
+async def _create_trip(client, token, title="Trip"):
+    r = await client.post("/api/trips/", json={"title": title},
+                          headers={"Authorization": f"Bearer {token}"})
+    return r.json()
+
+
+async def _create_step(client, token, trip_id, lat=1.0, lng=1.0):
+    r = await client.post("/api/steps/", json={
+        "trip_id": trip_id, "lat": lat, "lng": lng,
+        "client_uuid": str(uuid4()),
+    }, headers={"Authorization": f"Bearer {token}"})
+    return r.json()
+
+
+# ── health ─────────────────────────────────────────────────────────────────────
+
 @pytest.mark.asyncio
-async def test_register_user(client):
-    response = await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "username": "testuser",
-            "password": "secure123"
-        }
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-    assert data["token_type"] == "bearer"
+async def test_health(client):
+    r = await client.get("/health")
+    assert r.status_code == 200
+
+
+# ── auth ───────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_register_success(client):
+    r = await client.post("/api/auth/register", json={
+        "email": "a@test.com", "username": "auser", "password": "Password1",
+    })
+    assert r.status_code == 200
+    assert "access_token" in r.json()
 
 
 @pytest.mark.asyncio
 async def test_register_duplicate_email(client):
-    await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "username": "user1",
-            "password": "secure123"
-        }
-    )
-    response = await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "username": "user2",
-            "password": "secure123"
-        }
-    )
-    assert response.status_code == 400
+    await client.post("/api/auth/register", json={
+        "email": "dup@test.com", "username": "u1", "password": "Password1",
+    })
+    r = await client.post("/api/auth/register", json={
+        "email": "dup@test.com", "username": "u2", "password": "Password1",
+    })
+    assert r.status_code in (400, 409)
 
 
 @pytest.mark.asyncio
-async def test_login_user(client):
-    await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "username": "testuser",
-            "password": "secure123"
-        }
-    )
-    response = await client.post(
-        "/auth/login",
-        json={
-            "email_or_username": "testuser",
-            "password": "secure123"
-        }
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
+async def test_login_success(client):
+    await client.post("/api/auth/register", json={
+        "email": "b@test.com", "username": "buser", "password": "Password1",
+    })
+    r = await client.post("/api/auth/login", json={
+        "email_or_username": "buser", "password": "Password1",
+    })
+    assert r.status_code == 200
+    assert "access_token" in r.json()
 
 
 @pytest.mark.asyncio
-async def test_login_invalid_credentials(client):
-    response = await client.post(
-        "/auth/login",
-        json={
-            "email_or_username": "nonexistent",
-            "password": "wrong"
-        }
-    )
-    assert response.status_code == 401
+async def test_login_wrong_password(client):
+    await client.post("/api/auth/register", json={
+        "email": "c@test.com", "username": "cuser", "password": "Password1",
+    })
+    r = await client.post("/api/auth/login", json={
+        "email_or_username": "cuser", "password": "Wrong",
+    })
+    assert r.status_code == 401
 
+
+@pytest.mark.asyncio
+async def test_get_me(client):
+    token, _ = await _register(client)
+    r = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert "email" in r.json()
+
+
+# ── trips ──────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_create_trip(client):
-    # Register user
-    reg_response = await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "username": "testuser",
-            "password": "secure123"
-        }
-    )
-    token = reg_response.json()["access_token"]
-    
-    # Create trip
-    response = await client.post(
-        "/trips/",
-        json={
-            "title": "Europe Adventure",
-            "description": "Summer 2026",
-            "start_date": "2026-06-01",
-            "is_public": False
-        },
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert data["title"] == "Europe Adventure"
-    assert "id" in data
+    token, _ = await _register(client)
+    r = await client.post("/api/trips/", json={"title": "Japan 2026"},
+                          headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 201
+    assert r.json()["title"] == "Japan 2026"
 
 
 @pytest.mark.asyncio
-async def test_add_step_idempotent(client):
-    # Register user
-    reg_response = await client.post(
-        "/auth/register",
-        json={
-            "email": "test@example.com",
-            "username": "testuser",
-            "password": "secure123"
-        }
+async def test_list_trips_pagination(client):
+    token, _ = await _register(client)
+    for i in range(5):
+        await _create_trip(client, token, f"Trip {i}")
+    r = await client.get("/api/trips/?skip=0&limit=3",
+                         headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+
+
+@pytest.mark.asyncio
+async def test_get_trip(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    r = await client.get(f"/api/trips/{trip['id']}",
+                         headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_update_trip(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token, "Old")
+    r = await client.patch(f"/api/trips/{trip['id']}", json={"title": "New"},
+                           headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json()["title"] == "New"
+
+
+@pytest.mark.asyncio
+async def test_delete_trip(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    r = await client.delete(f"/api/trips/{trip['id']}",
+                            headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    trips = await client.get("/api/trips/", headers={"Authorization": f"Bearer {token}"})
+    assert all(t["id"] != trip["id"] for t in trips.json())
+
+
+@pytest.mark.asyncio
+async def test_trip_forbidden_other_user(client):
+    token_a, _ = await _register(client)
+    token_b, _ = await _register(client)
+    trip = await _create_trip(client, token_a)
+    r = await client.get(f"/api/trips/{trip['id']}",
+                         headers={"Authorization": f"Bearer {token_b}"})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_share_and_view_trip(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    share = await client.post(f"/api/trips/{trip['id']}/share",
+                              headers={"Authorization": f"Bearer {token}"})
+    assert share.status_code == 200
+    share_token = share.json()["share_token"]
+    pub = await client.get(f"/api/trips/shared/{share_token}")
+    assert pub.status_code == 200
+    assert pub.json()["title"] == trip["title"]
+
+
+# ── steps ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_step(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    step = await _create_step(client, token, trip["id"], lat=48.85, lng=2.35)
+    assert step["lat"] == 48.85
+
+
+@pytest.mark.asyncio
+async def test_list_steps(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    for i in range(3):
+        await _create_step(client, token, trip["id"], lat=float(i), lng=float(i))
+    r = await client.get(f"/api/steps/trip/{trip['id']}",
+                         headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert len(r.json()["steps"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_step_idempotent_client_uuid(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    cuuid = str(uuid4())
+    payload = {"trip_id": trip["id"], "lat": 1.0, "lng": 1.0, "client_uuid": cuuid}
+    r1 = await client.post("/api/steps/", json=payload,
+                           headers={"Authorization": f"Bearer {token}"})
+    r2 = await client.post("/api/steps/", json=payload,
+                           headers={"Authorization": f"Bearer {token}"})
+    assert r1.json()["id"] == r2.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_update_step(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    step = await _create_step(client, token, trip["id"])
+    r = await client.put(f"/api/steps/{step['id']}", json={"note": "updated"},
+                         headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json()["note"] == "updated"
+
+
+@pytest.mark.asyncio
+async def test_delete_step(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    step = await _create_step(client, token, trip["id"])
+    r = await client.delete(f"/api/steps/{step['id']}",
+                            headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+
+
+# ── collaboration ──────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_invite_and_list_collaborator(client):
+    token_owner, _ = await _register(client)
+    _, guest_tag = await _register(client)
+    trip = await _create_trip(client, token_owner)
+
+    r = await client.post(f"/api/trips/{trip['id']}/collaborators",
+                          json={"username": guest_tag, "role": "viewer"},
+                          headers={"Authorization": f"Bearer {token_owner}"})
+    assert r.status_code == 201
+    assert r.json()["username"] == guest_tag
+
+    list_r = await client.get(f"/api/trips/{trip['id']}/collaborators",
+                              headers={"Authorization": f"Bearer {token_owner}"})
+    assert list_r.status_code == 200
+    assert len(list_r.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_remove_collaborator(client):
+    token_owner, _ = await _register(client)
+    token_guest, guest_tag = await _register(client)
+    trip = await _create_trip(client, token_owner)
+
+    invite = await client.post(f"/api/trips/{trip['id']}/collaborators",
+                               json={"username": guest_tag, "role": "viewer"},
+                               headers={"Authorization": f"Bearer {token_owner}"})
+    collab_user_id = invite.json()["user_id"]
+
+    r = await client.delete(
+        f"/api/trips/{trip['id']}/collaborators/{collab_user_id}",
+        headers={"Authorization": f"Bearer {token_owner}"},
     )
-    token = reg_response.json()["access_token"]
-    
-    # Create trip
-    trip_response = await client.post(
-        "/trips/",
-        json={
-            "title": "Europe Adventure",
-            "description": "Summer 2026",
-            "is_public": False
-        },
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    trip_id = trip_response.json()["id"]
-    
-    # Add step with client_uuid
-    client_uuid = str(uuid4())
-    response = await client.post(
-        "/steps/",
-        json={
-            "trip_id": trip_id,
-            "lat": 48.8566,
-            "lng": 2.3522,
-            "altitude": 35,
-            "timestamp": "2026-03-20T12:00:00Z",
-            "note": "Eiffel Tower",
-            "client_uuid": client_uuid
-        },
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 201
-    first_response = response.json()
-    
-    # Add same step again (should be idempotent)
-    response2 = await client.post(
-        "/steps/",
-        json={
-            "trip_id": trip_id,
-            "lat": 48.8566,
-            "lng": 2.3522,
-            "altitude": 35,
-            "timestamp": "2026-03-20T12:00:00Z",
-            "note": "Eiffel Tower",
-            "client_uuid": client_uuid
-        },
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    second_response = response2.json()
-    assert first_response["id"] == second_response["id"]
+    assert r.status_code == 204

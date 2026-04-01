@@ -3,6 +3,20 @@ from fastapi.responses import FileResponse
 import os
 import uuid
 import base64
+from typing import Optional
+
+
+def _detect_image_type(data: bytes) -> Optional[str]:
+    """Verify file type from magic bytes, not just Content-Type header."""
+    if data[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'image/webp'
+    return None
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -38,13 +52,18 @@ async def upload_image(file: UploadFile = File(...)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File too large (max {MAX_SIZE // (1024*1024)}MB)"
         )
-    
-    # Generate unique filename
+
+    # Validate actual file content via magic bytes (not just Content-Type header)
+    detected = _detect_image_type(contents)
+    if not detected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match a supported image format (JPEG, PNG, GIF, WebP)"
+        )
+
+    # Generate unique filename using the verified MIME type
     unique_id = str(uuid.uuid4())
-    ext = file.filename.split('.')[-1].lower() if file.filename else "jpg"
-    # Ensure extension is safe
-    if ext not in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
-        ext = 'jpg'
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp"}[detected]
     filename = f"{unique_id}.{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     

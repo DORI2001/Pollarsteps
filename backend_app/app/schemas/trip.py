@@ -17,6 +17,14 @@ class TripCreate(TripBase):
     pass
 
 
+class TripUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    is_public: Optional[bool] = None
+
+
 class TripRead(TripBase):
     id: UUID
     user_id: UUID
@@ -28,6 +36,16 @@ class TripRead(TripBase):
 
     class Config:
         from_attributes = True
+
+
+class TripSplitRequest(BaseModel):
+    new_trip_title: str
+    step_ids: List[str]
+
+
+class TripSplitResponse(BaseModel):
+    original_trip: TripRead
+    new_trip: TripRead
 
 
 class TripWithSteps(TripRead):

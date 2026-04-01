@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 
 class StepBase(BaseModel):
@@ -27,9 +27,20 @@ class StepUpdate(BaseModel):
     duration_days: Optional[int] = None
 
 
+class StepImageRead(BaseModel):
+    id: UUID
+    image_url: str
+    caption: Optional[str] = None
+    order_index: int = 0
+
+    class Config:
+        from_attributes = True
+
+
 class StepRead(StepBase):
     id: UUID
     timestamp: datetime
+    images: List[StepImageRead] = []
 
     class Config:
         from_attributes = True

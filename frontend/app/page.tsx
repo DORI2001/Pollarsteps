@@ -264,8 +264,20 @@ function HomeContent({
   };
 
   const handleSplitTrip = async (newTripTitle: string, stepsToMove: any[]): Promise<void> => {
-    // TODO: Implement trip splitting via API
-    console.warn("Trip splitting not yet implemented");
+    const token = session.getToken();
+    if (!token || !currentTrip) return;
+
+    const stepIds = stepsToMove.map((s: any) => s.id);
+    const result = await api.splitTrip(token, currentTrip.id, newTripTitle, stepIds);
+
+    // Reload trips list
+    const updatedTrips = await api.getTrips(token);
+    setTrips(updatedTrips);
+
+    // Stay on the original trip with updated steps
+    const originalSteps = await api.getSteps(token, result.original_trip.id);
+    setSteps(originalSteps);
+    setCurrentTrip({ ...result.original_trip, steps: originalSteps });
   };
 
   if (loading) {
@@ -532,7 +544,8 @@ function HomeContent({
   const handleCreateTripFromToolbar = async (
     title: string,
     description: string,
-    startDate: string
+    startDate: string,
+    endDate?: string
   ) => {
     const token = session.getToken();
     if (!token) {
@@ -542,18 +555,20 @@ function HomeContent({
     }
 
     try {
-      const trip = await api.createTrip(
-        token,
-        title,
-        description,
-        startDate
-      );
+      const trip = await api.createTrip(token, title, description, startDate, endDate);
       setTrips([...trips, trip]);
       setCurrentTrip(trip);
       setSteps([]);
     } catch (err: any) {
       console.error("Failed to create trip:", err);
       throw err;
+    }
+  };
+
+  const handleUpdateTrip = (updatedTrip: any) => {
+    setTrips((prev: any[]) => prev.map((t: any) => t.id === updatedTrip.id ? { ...t, ...updatedTrip } : t));
+    if (currentTrip?.id === updatedTrip.id) {
+      setCurrentTrip((prev: any) => ({ ...prev, ...updatedTrip }));
     }
   };
 
@@ -638,11 +653,12 @@ function HomeContent({
         onSelectTrip={handleSelectTrip}
         onCreateTrip={handleCreateTripFromToolbar}
         onDeleteTrip={handleDeleteTrip}
+        onUpdateTrip={handleUpdateTrip}
         onLogout={handleLogout}
       />
 
       {/* Map Container */}
-      <div style={{ position: "absolute", top: "70px", left: 0, right: steps.length > 0 ? "420px" : 0, bottom: 0, zIndex: 0, overflow: "hidden" }}>
+      <div className="map-container" style={{ position: "absolute", top: "70px", left: 0, right: steps.length > 0 ? "420px" : 0, bottom: 0, zIndex: 0, overflow: "hidden" }}>
         <TripViewer
           steps={steps}
           onMapClick={handleMapClick}
@@ -663,6 +679,7 @@ function HomeContent({
       {/* Trip Statistics Panel */}
       {currentTrip && steps.length > 0 && (
         <div
+          className="stats-panel"
           style={{
             position: "fixed",
             top: 90,
@@ -768,6 +785,52 @@ function HomeContent({
               totalDaysTravelled={totalDaysTravelledMemo}
             />
           </div>
+
+          {/* Step Timeline */}
+          {steps.length > 0 && (
+            <div style={{ marginTop: 20, borderTop: `1px solid ${COLORS.separator}`, paddingTop: 20 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.5px", color: COLORS.textSecondary, margin: "0 0 12px 0", textTransform: "uppercase" }}>
+                Timeline ({steps.length} stop{steps.length !== 1 ? "s" : ""})
+              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {steps.map((step: any, i: number) => (
+                  <div key={step.id} style={{ display: "flex", gap: 12, position: "relative" }}>
+                    {/* Vertical line connector */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 20, flexShrink: 0 }}>
+                      <div style={{
+                        width: 10, height: 10, borderRadius: "50%",
+                        background: i === 0 ? COLORS.primary : COLORS.secondary,
+                        border: `2px solid ${COLORS.surface}`,
+                        boxShadow: `0 0 0 2px ${i === 0 ? COLORS.primary : COLORS.secondary}40`,
+                        zIndex: 1,
+                      }} />
+                      {i < steps.length - 1 && (
+                        <div style={{ width: 2, flex: 1, background: `${COLORS.textSecondary}30`, marginTop: 2, marginBottom: 2 }} />
+                      )}
+                    </div>
+                    {/* Content */}
+                    <div style={{ paddingBottom: 16, flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {step.location_name || `Stop ${i + 1}`}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {new Date(step.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {step.duration_days ? ` · ${step.duration_days}d` : ""}
+                      </div>
+                      {step.note && (
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as any }}>
+                          {step.note}
+                        </div>
+                      )}
+                      {step.image_url && (
+                        <img src={step.image_url} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: "cover", marginTop: 6 }} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Photo Gallery Button */}
           {steps.some((s: any) => s.image_url) && (

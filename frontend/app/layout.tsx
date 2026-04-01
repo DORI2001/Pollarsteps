@@ -5,6 +5,7 @@ export const metadata = {
   title: 'Pollarsteps — Track Your Adventures',
   description: 'Pin your travel memories on a beautiful interactive map. Discover recommendations, track statistics, and relive every journey.',
   icons: { icon: '/favicon.ico' },
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
 }
 
 export default function RootLayout({

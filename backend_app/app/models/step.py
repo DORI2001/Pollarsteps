@@ -22,3 +22,4 @@ class Step(Base):
     duration_days = Column(Integer, nullable=True)  # How many days spent at this location
 
     trip = relationship("Trip", back_populates="steps")
+    images = relationship("StepImage", back_populates="step", cascade="all, delete-orphan", order_by="StepImage.order_index")

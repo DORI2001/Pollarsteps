@@ -43,15 +43,9 @@ export function RecommendationPanel({
         budget,
         question
       );
-      if (!result) {
-        setError("No recommendations returned. Please try again.");
-        setRecommendations(null);
-        return;
-      }
       setRecommendations(result);
-    } catch (err) {
-      console.error("Failed to get recommendations:", err);
-      setError("Failed to get recommendations. Please try again.");
+    } catch (err: any) {
+      setError(err?.message || "Failed to get recommendations. Please try again.");
     } finally {
       setLoading(false);
     }

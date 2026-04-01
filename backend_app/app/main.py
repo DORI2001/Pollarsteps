@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.db import engine, Base
 from app.api.routes import auth, trips, steps, ai_chronicler, analytics, uploads, geocoding, recommendations, stories
+from app.models.step_image import StepImage  # noqa: F401 — ensure table is created
+from app.models.collaborator import TripCollaborator  # noqa: F401
 import os
 
 # Load .env file explicitly at startup
@@ -12,10 +14,14 @@ load_dotenv(os.path.abspath(env_path), override=True)
 
 app = FastAPI(title="Pollarsteps Clone API")
 
-# Add CORS middleware
+# Add CORS middleware — origins can be extended via ALLOWED_ORIGINS env var
+_default_origins = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
+_extra = os.environ.get("ALLOWED_ORIGINS", "")
+_allowed_origins = _default_origins + [o.strip() for o in _extra.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

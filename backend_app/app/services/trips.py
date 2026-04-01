@@ -1,11 +1,13 @@
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import List, Optional
+from datetime import datetime
 import logging
 from app.models.trip import Trip
 from app.models.step import Step
-from app.schemas.trip import TripCreate
+from app.schemas.trip import TripCreate, TripRead, TripUpdate
 from app.schemas.trip import TripWithSteps
 from app.schemas.step import StepRead
 from app.utils.distance import calculate_total_distance
@@ -39,11 +41,11 @@ async def create_trip(user_id: UUID, payload: TripCreate, session: AsyncSession)
     return trip
 
 
-async def get_user_trips(user_id: UUID, session: AsyncSession) -> List[Trip]:
+async def get_user_trips(user_id: UUID, session: AsyncSession, skip: int = 0, limit: int = 100) -> List[Trip]:
     """Get all trips for a user with enriched distance and step count."""
     user_id_str = str(user_id)
     result = await session.execute(
-        select(Trip).where(Trip.user_id == user_id_str).order_by(Trip.created_at.desc())
+        select(Trip).where(Trip.user_id == user_id_str).order_by(Trip.created_at.desc()).offset(skip).limit(limit)
     )
     trips = result.scalars().all()
     
@@ -67,9 +69,9 @@ async def get_trip_with_steps(trip_id: UUID, session: AsyncSession) -> TripWithS
     if not trip:
         return None
     
-    # Load steps ordered by timestamp
+    # Load steps ordered by timestamp, eager-load images
     result = await session.execute(
-        select(Step).where(Step.trip_id == trip_id_str).order_by(Step.timestamp.asc())
+        select(Step).where(Step.trip_id == trip_id_str).options(selectinload(Step.images)).order_by(Step.timestamp.asc())
     )
     steps = result.scalars().all()
     trip.total_distance = calculate_total_distance(steps)
@@ -95,6 +97,23 @@ async def get_trip_with_steps(trip_id: UUID, session: AsyncSession) -> TripWithS
         steps=step_reads,
         route_geojson=geojson,
     )
+
+
+async def update_trip(trip_id: UUID, user_id: UUID, payload: TripUpdate, session: AsyncSession) -> Trip:
+    trip_id_str = str(trip_id)
+    user_id_str = str(user_id)
+    result = await session.execute(select(Trip).where(Trip.id == trip_id_str))
+    trip = result.scalar_one_or_none()
+    if not trip:
+        raise NotFoundError("Trip")
+    check_ownership(trip.user_id, user_id_str, "Trip")
+    update_data = payload.model_dump(exclude_none=True)
+    for key, value in update_data.items():
+        setattr(trip, key, value)
+    trip.updated_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(trip)
+    return trip
 
 
 async def delete_trip(trip_id: UUID, session: AsyncSession, current_user) -> dict:
@@ -136,3 +155,75 @@ async def delete_trip(trip_id: UUID, session: AsyncSession, current_user) -> dic
         logger.error(f"Exception during deletion: {str(e)}")
         await session.rollback()
         raise
+
+
+async def split_trip(
+    trip_id: UUID,
+    user_id: UUID,
+    new_title: str,
+    step_ids: List[str],
+    session: AsyncSession,
+):
+    """Split a trip by moving specified steps into a new trip."""
+    trip_id_str = str(trip_id)
+    user_id_str = str(user_id)
+
+    result = await session.execute(select(Trip).where(Trip.id == trip_id_str))
+    original_trip = result.scalar_one_or_none()
+    if not original_trip:
+        raise NotFoundError("Trip")
+    check_ownership(original_trip.user_id, user_id_str, "Trip")
+
+    if not step_ids:
+        raise ValueError("No steps provided to split")
+
+    # Verify all step_ids belong to this trip
+    steps_result = await session.execute(
+        select(Step).where(Step.id.in_(step_ids), Step.trip_id == trip_id_str)
+    )
+    steps_to_move = steps_result.scalars().all()
+    if len(steps_to_move) != len(step_ids):
+        raise ValueError("Some steps do not belong to this trip")
+
+    # Determine start_date for new trip from earliest step timestamp
+    earliest_ts = min(s.timestamp for s in steps_to_move)
+    new_start_date = earliest_ts.date() if earliest_ts else None
+
+    # Create the new trip
+    new_trip = Trip(
+        user_id=user_id_str,
+        title=new_title,
+        start_date=new_start_date,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session.add(new_trip)
+    await session.flush()  # get new_trip.id
+
+    # Move steps to new trip
+    await session.execute(
+        update(Step)
+        .where(Step.id.in_(step_ids))
+        .values(trip_id=new_trip.id)
+    )
+
+    await session.commit()
+    await session.refresh(new_trip)
+    await session.refresh(original_trip)
+
+    # Recalculate distances
+    orig_steps_result = await session.execute(
+        select(Step).where(Step.trip_id == trip_id_str).order_by(Step.timestamp.asc())
+    )
+    orig_steps = orig_steps_result.scalars().all()
+    original_trip.total_distance = calculate_total_distance(orig_steps)
+    original_trip.total_steps = len(orig_steps)
+
+    new_steps_result = await session.execute(
+        select(Step).where(Step.trip_id == new_trip.id).order_by(Step.timestamp.asc())
+    )
+    new_steps = new_steps_result.scalars().all()
+    new_trip.total_distance = calculate_total_distance(new_steps)
+    new_trip.total_steps = len(new_steps)
+
+    return original_trip, new_trip

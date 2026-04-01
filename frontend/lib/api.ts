@@ -172,7 +172,8 @@ export const api = {
     token: string,
     title: string,
     description?: string,
-    startDate?: string
+    startDate?: string,
+    endDate?: string
   ): Promise<any> {
     if (!token) throw createApiError("Token required", 401, "MISSING_TOKEN");
     if (!title || title.trim().length === 0) {
@@ -184,15 +185,19 @@ export const api = {
       const body: any = {
         title: title.trim(),
       };
-      
+
       // Only include description if it has content
       if (description && description.trim()) {
         body.description = description.trim();
       }
-      
+
       // Only include start_date if it has content
       if (startDate && startDate.trim()) {
         body.start_date = startDate;
+      }
+
+      if (endDate && endDate.trim()) {
+        body.end_date = endDate;
       }
       
       const response = await fetchWithTimeout(url, {
@@ -307,6 +312,68 @@ export const api = {
       }
       throw createApiError(
         err instanceof Error ? err.message : "Failed to delete trip",
+        0,
+        "NETWORK_ERROR"
+      );
+    }
+  },
+
+  async updateTrip(
+    token: string,
+    tripId: string,
+    updates: { title?: string; description?: string; start_date?: string; end_date?: string; is_public?: boolean }
+  ): Promise<any> {
+    if (!token) throw createApiError("Token required", 401, "MISSING_TOKEN");
+    if (!tripId) throw createApiError("Trip ID required", 400, "MISSING_TRIP_ID");
+
+    try {
+      const response = await fetchWithTimeout(`${API_BASE}/trips/${tripId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) {
+        const errorMsg = await parseApiError(response);
+        throw createApiError(errorMsg, response.status, "UPDATE_TRIP_FAILED");
+      }
+      return await response.json();
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err) throw err;
+      throw createApiError(err instanceof Error ? err.message : "Failed to update trip", 0, "NETWORK_ERROR");
+    }
+  },
+
+  async splitTrip(
+    token: string,
+    tripId: string,
+    newTripTitle: string,
+    stepIds: string[]
+  ): Promise<{ original_trip: any; new_trip: any }> {
+    if (!token) throw createApiError("Token required", 401, "MISSING_TOKEN");
+    if (!tripId) throw createApiError("Trip ID required", 400, "MISSING_TRIP_ID");
+    if (!newTripTitle?.trim()) throw createApiError("New trip title required", 400, "MISSING_TITLE");
+    if (!stepIds?.length) throw createApiError("No steps provided", 400, "MISSING_STEPS");
+
+    try {
+      const response = await fetchWithTimeout(`${API_BASE}/trips/${tripId}/split`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ new_trip_title: newTripTitle, step_ids: stepIds }),
+      });
+
+      if (!response.ok) {
+        const errorMsg = await parseApiError(response);
+        throw createApiError(errorMsg, response.status, "SPLIT_TRIP_FAILED");
+      }
+
+      return await response.json();
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err) throw err;
+      throw createApiError(
+        err instanceof Error ? err.message : "Failed to split trip",
         0,
         "NETWORK_ERROR"
       );
@@ -469,6 +536,19 @@ export const api = {
     }
   },
 
+  async changePassword(token: string, currentPassword: string, newPassword: string): Promise<void> {
+    if (!token) throw createApiError("Token required", 401, "MISSING_TOKEN");
+    const response = await fetchWithTimeout(`${API_BASE}/auth/me/password`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw createApiError(err.detail || "Failed to change password", response.status, "CHANGE_PASSWORD_FAILED");
+    }
+  },
+
   // Get current user
   async getCurrentUser(token: string): Promise<User> {
     if (!token) throw createApiError("Token required", 401, "MISSING_TOKEN");
@@ -598,15 +678,18 @@ export const api = {
       );
 
       if (!response.ok) {
-        console.error("Failed to get recommendations");
-        return null;
+        const msg = await parseApiError(response);
+        throw createApiError(msg || "Recommendations unavailable", response.status, "RECOMMENDATIONS_FAILED");
       }
 
-      const data = await response.json();
-      return data;
+      return await response.json();
     } catch (err) {
-      console.error("[API] Exception in getRecommendations:", err);
-      return null;
+      if (err && typeof err === "object" && "code" in err) throw err;
+      throw createApiError(
+        err instanceof Error ? err.message : "Failed to get recommendations",
+        0,
+        "NETWORK_ERROR"
+      );
     }
   },
 

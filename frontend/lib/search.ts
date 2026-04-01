@@ -80,8 +80,8 @@ export function filterTrips(
       compareA = a.total_distance || 0;
       compareB = b.total_distance || 0;
     } else if (sortBy === "locations") {
-      compareA = a.steps?.length || 0;
-      compareB = b.steps?.length || 0;
+      compareA = a.total_steps ?? a.steps?.length ?? 0;
+      compareB = b.total_steps ?? b.steps?.length ?? 0;
     }
 
     return sortOrder === "asc" ? compareA - compareB : compareB - compareA;
