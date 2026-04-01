@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { EditStepModal } from "./EditStepModal";
@@ -27,6 +26,7 @@ type TripViewerLeafletProps = {
   tripId: string;
   token: string;
   fitTrigger?: number;
+  centerLocation?: { lat: number; lng: number; zoom?: number } | null;
 };
 
 // Reverse geocode coordinates to location name
@@ -50,7 +50,7 @@ async function getLocationName(lat: number, lng: number): Promise<string> {
   }
 }
 
-function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token, fitTrigger }: TripViewerLeafletProps) {
+function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token, fitTrigger, centerLocation }: TripViewerLeafletProps) {
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<(L.Marker | L.Polyline)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -124,11 +124,10 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
     lon: number;
   }) => {
     setSelectedLocation(location);
-    setShowRecommendations(true);
-    
-    // Center map on selected location
+
+    // Fly map to the searched location
     if (mapRef.current) {
-      mapRef.current.setView([location.lat, location.lon], 13, { animate: true });
+      mapRef.current.flyTo([location.lat, location.lon], 13, { animate: true, duration: 1.0 });
     }
   };
 
@@ -420,6 +419,16 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
     }, 100);
   }, [fitTrigger]);
 
+  // Fly to a named location when centerLocation is set (e.g. trip title geocoded)
+  useEffect(() => {
+    if (!centerLocation || !mapRef.current) return;
+    mapRef.current.flyTo(
+      [centerLocation.lat, centerLocation.lng],
+      centerLocation.zoom ?? 6,
+      { animate: true, duration: 1.2 }
+    );
+  }, [centerLocation]);
+
   return (
     <>
       {showEditModal && selectedStep && (
@@ -451,11 +460,67 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
         left: 16,
         zIndex: 100,
         maxWidth: 320,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
       }}>
         <LocationSearch
           onLocationSelected={handleLocationSelected}
           token={token}
         />
+
+        {/* Add stop here pill — appears after a location is selected */}
+        {selectedLocation && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "rgba(255,255,255,0.95)",
+            borderRadius: 12,
+            padding: "10px 14px",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+            backdropFilter: "blur(8px)",
+          }}>
+            <span style={{ fontSize: 13, color: "#333", fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              📍 {selectedLocation.name}
+            </span>
+            <button
+              onClick={() => {
+                onMapClickRef.current({ lat: selectedLocation.lat, lng: selectedLocation.lon });
+                setSelectedLocation(null);
+              }}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "none",
+                background: "#5B6CF0",
+                color: "white",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              + Add stop
+            </button>
+            <button
+              onClick={() => setSelectedLocation(null)}
+              style={{
+                padding: "4px 6px",
+                borderRadius: 6,
+                border: "none",
+                background: "transparent",
+                color: "#999",
+                fontSize: 14,
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Map Style Toggle */}
@@ -522,6 +587,4 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
 
 const TripViewerLeaflet = React.memo(TripViewerLeafletComponent);
 
-export default dynamic(() => Promise.resolve(TripViewerLeaflet), {
-  ssr: false,
-});
+export default TripViewerLeaflet;

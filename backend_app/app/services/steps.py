@@ -55,12 +55,23 @@ async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession) ->
     )
     session.add(step)
     await session.commit()
-    # Reload with images eagerly to avoid lazy-load greenlet error
-    result = await session.execute(
-        select(Step).where(Step.id == step.id).options(selectinload(Step.images))
+    await session.refresh(step)
+    # New step always has zero images — build read model directly to avoid lazy-load
+    from app.schemas.step import StepImageRead
+    return StepRead(
+        id=step.id,
+        trip_id=step.trip_id,
+        lat=step.lat,
+        lng=step.lng,
+        altitude=step.altitude,
+        timestamp=step.timestamp,
+        note=step.note,
+        image_url=step.image_url,
+        location_name=step.location_name,
+        client_uuid=step.client_uuid,
+        duration_days=step.duration_days,
+        images=[],
     )
-    step = result.scalar_one()
-    return StepRead.model_validate(step)
 
 
 async def update_step(step_id: UUID, payload: StepUpdate, session: AsyncSession, current_user) -> StepRead:
@@ -87,7 +98,21 @@ async def update_step(step_id: UUID, payload: StepUpdate, session: AsyncSession,
         select(Step).where(Step.id == step_id_str).options(selectinload(Step.images))
     )
     step = result.scalar_one()
-    return StepRead.model_validate(step)
+    from app.schemas.step import StepImageRead
+    return StepRead(
+        id=step.id,
+        trip_id=step.trip_id,
+        lat=step.lat,
+        lng=step.lng,
+        altitude=step.altitude,
+        timestamp=step.timestamp,
+        note=step.note,
+        image_url=step.image_url,
+        location_name=step.location_name,
+        client_uuid=step.client_uuid,
+        duration_days=step.duration_days,
+        images=[StepImageRead(id=img.id, image_url=img.image_url, caption=img.caption, order_index=img.order_index) for img in step.images],
+    )
 
 
 async def delete_step(step_id: UUID, session: AsyncSession, current_user) -> dict:

@@ -31,6 +31,7 @@ export default function Home() {
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [recommendationLocation, setRecommendationLocation] = useState<any>(null);
   const [mapFitCounter, setMapFitCounter] = useState(0);
+  const [centerLocation, setCenterLocation] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
   return (
     <ProtectedRoute>
@@ -61,6 +62,8 @@ export default function Home() {
         setRecommendationLocation={setRecommendationLocation}
         mapFitCounter={mapFitCounter}
         setMapFitCounter={setMapFitCounter}
+        centerLocation={centerLocation}
+        setCenterLocation={setCenterLocation}
       />
     </ProtectedRoute>
   );
@@ -93,6 +96,8 @@ function HomeContent({
   setRecommendationLocation,
   mapFitCounter,
   setMapFitCounter,
+  centerLocation,
+  setCenterLocation,
 }: any) {
 
   // Check authentication
@@ -559,6 +564,19 @@ function HomeContent({
       setTrips([...trips, trip]);
       setCurrentTrip(trip);
       setSteps([]);
+
+      // Fly the map to the location suggested by the trip title
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+        const geo = await fetch(
+          `${API_BASE}/geocoding/geocode?location=${encodeURIComponent(title)}`
+        ).then((r) => r.json());
+        if (geo?.latitude && geo?.longitude) {
+          setCenterLocation({ lat: geo.latitude, lng: geo.longitude, zoom: 6 });
+        }
+      } catch {
+        // Non-critical — skip the pan if geocoding fails
+      }
     } catch (err: any) {
       console.error("Failed to create trip:", err);
       throw err;
@@ -658,7 +676,7 @@ function HomeContent({
       />
 
       {/* Map Container */}
-      <div className="map-container" style={{ position: "absolute", top: "70px", left: 0, right: steps.length > 0 ? "420px" : 0, bottom: 0, zIndex: 0, overflow: "hidden" }}>
+      <div className="map-container" style={{ position: "absolute", top: "70px", left: 0, right: steps.length > 0 ? "420px" : 0, bottom: 0, zIndex: 0 }}>
         <TripViewer
           steps={steps}
           onMapClick={handleMapClick}
@@ -666,6 +684,7 @@ function HomeContent({
           token={session.getToken() || undefined}
           onStepsChange={handleStepsChange}
           fitTrigger={mapFitCounter}
+          centerLocation={centerLocation}
         />
       </div>
 
