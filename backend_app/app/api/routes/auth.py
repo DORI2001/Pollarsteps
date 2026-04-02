@@ -5,6 +5,7 @@ from app.schemas.auth import RegisterRequest, LoginRequest, TokenPair, ChangePas
 from app.schemas.user import UserRead
 from app.services.auth import register, login, refresh_auth_token, change_password
 from app.api.deps import get_db, get_current_user
+from app.utils.rate_limit import check_auth_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -13,12 +14,12 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-@router.post("/register", response_model=TokenPair)
+@router.post("/register", response_model=TokenPair, dependencies=[Depends(check_auth_limit)])
 async def register_user(payload: RegisterRequest, session: AsyncSession = Depends(get_db)):
     return await register(payload, session)
 
 
-@router.post("/login", response_model=TokenPair)
+@router.post("/login", response_model=TokenPair, dependencies=[Depends(check_auth_limit)])
 async def login_user(payload: LoginRequest, session: AsyncSession = Depends(get_db)):
     return await login(payload, session)
 

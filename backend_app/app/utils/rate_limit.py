@@ -28,6 +28,9 @@ recommendations_limiter = RateLimiter(max_calls=10, window_seconds=60)
 # 5 story creations per 10 minutes per IP
 stories_limiter = RateLimiter(max_calls=5, window_seconds=600)
 
+# Auth: 10 login/register attempts per minute per IP
+auth_limiter = RateLimiter(max_calls=10, window_seconds=60)
+
 
 def get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
@@ -51,4 +54,13 @@ def check_stories_limit(request: Request):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many story creations. Please wait before trying again.",
+        )
+
+
+def check_auth_limit(request: Request):
+    ip = get_client_ip(request)
+    if not auth_limiter.is_allowed(ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many authentication attempts. Please wait a minute.",
         )

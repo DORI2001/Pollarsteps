@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from app.main import app
 from app.core.db import Base
 from app.api.deps import get_db
+from app.utils.rate_limit import check_auth_limit
 from uuid import uuid4
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -30,6 +31,7 @@ async def client(test_engine):
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[check_auth_limit] = lambda: None
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
