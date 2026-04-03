@@ -153,170 +153,137 @@ export function PhotoGallery({ steps, title }: PhotoGalleryProps) {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 999,
-            overflow: "auto",
             backdropFilter: "blur(4px)",
           }}
           onClick={() => setSelectedImage(null)}
         >
-          <div
+          {/* Close button — fixed to viewport top-right, never moves */}
+          <button
+            onClick={() => setSelectedImage(null)}
             style={{
-              position: "relative",
+              position: "fixed",
+              top: 20,
+              right: 20,
+              background: "rgba(255,255,255,0.2)",
+              border: "none",
+              color: "white",
+              fontSize: 20,
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              cursor: "pointer",
               display: "flex",
-              flexDirection: "column",
               alignItems: "center",
-              maxWidth: "90vw",
-              maxHeight: "90vh",
-              width: "100%",
+              justifyContent: "center",
+              zIndex: 1001,
+              transition: "background 0.2s",
             }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Close button */}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.35)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.2)"; }}
+          >✕</button>
+
+          {/* Prev button — fixed to viewport left-center, never moves */}
+          {photoSteps.length > 1 && (
             <button
-              onClick={() => setSelectedImage(null)}
+              onClick={(e) => { e.stopPropagation(); handlePrevious(); }}
               style={{
-                position: "absolute",
-                top: 20,
-                right: 20,
-                background: "rgba(255, 255, 255, 0.2)",
-                border: "none",
+                position: "fixed",
+                left: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.3)",
                 color: "white",
-                fontSize: 24,
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 borderRadius: "50%",
                 cursor: "pointer",
+                fontSize: 20,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                zIndex: 1001,
                 transition: "background 0.2s",
-                zIndex: 1000,
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(255, 255, 255, 0.3)";
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.3)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.15)"; }}
+            >‹</button>
+          )}
+
+          {/* Next button — fixed to viewport right-center, never moves */}
+          {photoSteps.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleNext(); }}
+              style={{
+                position: "fixed",
+                right: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.3)",
+                color: "white",
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                cursor: "pointer",
+                fontSize: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1001,
+                transition: "background 0.2s",
               }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(255, 255, 255, 0.2)";
-              }}
-            >
-              ✕
-            </button>
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.3)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.15)"; }}
+            >›</button>
+          )}
+
+          {/* Content — image + info, centred, no layout shift */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              maxWidth: "80vw",
+              gap: 16,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Counter */}
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>
+              {imageIndex + 1} / {photoSteps.length}
+            </div>
 
             {/* Main image */}
             <img
               src={selectedImage.image_url}
               alt={selectedImage.location_name}
               style={{
-                maxWidth: "100%",
-                maxHeight: "70vh",
+                maxWidth: "80vw",
+                maxHeight: "65vh",
                 objectFit: "contain",
                 borderRadius: 8,
               }}
             />
 
-            {/* Navigation */}
-            <div
-              style={{
-                display: "flex",
-                gap: 16,
-                marginTop: 20,
-                alignItems: "center",
-              }}
-            >
-              <button
-                onClick={handlePrevious}
-                style={{
-                  background: "rgba(255, 255, 255, 0.1)",
-                  border: "1px solid rgba(255, 255, 255, 0.3)",
-                  color: "white",
-                  padding: "10px 16px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: 14,
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    "rgba(255, 255, 255, 0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    "rgba(255, 255, 255, 0.1)";
-                }}
-              >
-                ← Previous
-              </button>
-
-              <div
-                style={{
-                  color: "white",
-                  fontSize: 12,
-                  minWidth: 80,
-                  textAlign: "center",
-                }}
-              >
-                {imageIndex + 1} / {photoSteps.length}
-              </div>
-
-              <button
-                onClick={handleNext}
-                style={{
-                  background: "rgba(255, 255, 255, 0.1)",
-                  border: "1px solid rgba(255, 255, 255, 0.3)",
-                  color: "white",
-                  padding: "10px 16px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: 14,
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    "rgba(255, 255, 255, 0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    "rgba(255, 255, 255, 0.1)";
-                }}
-              >
-                Next →
-              </button>
-            </div>
-
             {/* Image info */}
-            <div
-              style={{
-                marginTop: 16,
-                textAlign: "center",
-                color: "white",
-                maxWidth: 600,
-              }}
-            >
+            <div style={{ textAlign: "center", color: "white", maxWidth: 500 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
                 📍 {selectedImage.location_name}
               </div>
-              <div style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.7)", marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 8 }}>
                 {new Date(selectedImage.timestamp).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
+                  month: "short", day: "numeric", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
                 })}
               </div>
               {selectedImage.note && (
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontStyle: "italic",
-                    color: "rgba(255, 255, 255, 0.8)",
-                    paddingTop: 8,
-                    borderTop: "1px solid rgba(255, 255, 255, 0.2)",
-                  }}
-                >
+                <div style={{
+                  fontSize: 12, fontStyle: "italic",
+                  color: "rgba(255,255,255,0.75)",
+                  paddingTop: 8,
+                  borderTop: "1px solid rgba(255,255,255,0.2)",
+                }}>
                   💭 {selectedImage.note}
                 </div>
               )}
