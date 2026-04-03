@@ -175,11 +175,25 @@ function HomeContent({
     }
 
     try {
-      const trip = await api.createTrip(token, newTripTitle.trim());
+      const title = newTripTitle.trim();
+      const trip = await api.createTrip(token, title);
       setTrips([...trips, trip]);
       setCurrentTrip(trip);
       setSteps([]);
       setNewTripTitle("");
+
+      // Fly the map to the location suggested by the trip title
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api";
+        const geo = await fetch(
+          `${API_BASE}/geocoding/geocode?location=${encodeURIComponent(title)}`
+        ).then((r) => r.json());
+        if (geo?.latitude && geo?.longitude) {
+          setCenterLocation({ lat: geo.latitude, lng: geo.longitude, zoom: 6 });
+        }
+      } catch {
+        // Non-critical — skip the pan if geocoding fails
+      }
     } catch (err: any) {
       console.error("Failed to create trip - Full error:", err);
       const errorMsg = err.message || err.detail || JSON.stringify(err);
