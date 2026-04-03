@@ -144,5 +144,5 @@ bash scripts/clean.sh    # Clean build artifacts
 ---
 
 <div align="center">
-MIT License · Built with ❤️ by <a href="https://github.com/DORI2001">Dori</a>
+· Built with ❤️ by <a href="https://github.com/DORI2001">Dori</a>
 </div>
