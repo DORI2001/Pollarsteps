@@ -24,7 +24,7 @@ interface TokenPair {
 }
 
 interface ApiErrorResponse {
-  detail?: string;
+  detail?: string | any[];
   message?: string;
   error?: string;
 }
@@ -45,7 +45,12 @@ const createApiError = (
 const parseApiError = async (response: Response): Promise<string> => {
   try {
     const error = (await response.json()) as ApiErrorResponse;
-    return error.detail || error.message || "API Error";
+    const detail = error.detail;
+    if (Array.isArray(detail)) {
+      // Pydantic v2 validation errors: [{msg, loc, ...}, ...]
+      return detail.map((d: any) => d.msg?.replace(/^Value error, /, "") ?? String(d)).join(", ");
+    }
+    return (detail as string) || error.message || "API Error";
   } catch {
     return `HTTP ${response.status}: ${response.statusText}`;
   }
