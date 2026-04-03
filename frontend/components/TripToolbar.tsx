@@ -312,7 +312,8 @@ export function TripToolbar({
 
           {/* Action Buttons */}
           <div className="toolbar-actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {/* Search & Filter Button */}
+
+            {/* ── Zone 1: Navigation ── */}
             <button
               onClick={() => setShowFilterModal(true)}
               style={{
@@ -337,7 +338,6 @@ export function TripToolbar({
               Search
             </button>
 
-            {/* Trip Select Dropdown */}
             <select
               onChange={(e) => {
                 const trip = filteredTrips.find((t) => t.id === e.target.value);
@@ -364,11 +364,10 @@ export function TripToolbar({
               ))}
             </select>
 
-            {/* New Trip Button */}
             <button
               onClick={() => setShowCreateModal(true)}
               style={{
-                padding: "8px 16px",
+                padding: "9px 20px",
                 borderRadius: 20,
                 border: "none",
                 background: COLORS.success,
@@ -388,7 +387,12 @@ export function TripToolbar({
               + New Trip
             </button>
 
-            {/* Share Button */}
+            {/* ── Divider ── */}
+            {currentTrip && (
+              <span style={{ width: 1, height: 20, background: COLORS.border, opacity: 0.5, flexShrink: 0 }} />
+            )}
+
+            {/* ── Zone 2: Trip Actions ── */}
             {currentTrip && (
               <button
                 onClick={handleShare}
@@ -416,7 +420,6 @@ export function TripToolbar({
               </button>
             )}
 
-            {/* Create Reel Button */}
             {currentTrip && (
               <button
                 onClick={() => setShowStoryModal(true)}
@@ -438,11 +441,10 @@ export function TripToolbar({
                   (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
               >
-                🎬 Create Reel
+                🎬 Reel
               </button>
             )}
 
-            {/* Export Button */}
             {currentTrip && (
               <button
                 onClick={() => setShowExportModal(true)}
@@ -458,10 +460,7 @@ export function TripToolbar({
                   transition: "all 0.2s ease-in-out",
                 }}
                 onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.06)`;
-                  if (COLORS.text === "#F5F5F7") {
-                    (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
-                  }
+                  (e.currentTarget as HTMLButtonElement).style.background = COLORS.text === "#F5F5F7" ? `rgba(255,255,255,0.1)` : `rgba(0,0,0,0.06)`;
                 }}
                 onMouseOut={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.background = "transparent";
@@ -471,7 +470,6 @@ export function TripToolbar({
               </button>
             )}
 
-            {/* Edit Trip Button */}
             {currentTrip && (
               <button
                 onClick={handleEditOpen}
@@ -487,8 +485,7 @@ export function TripToolbar({
                   transition: "all 0.2s ease-in-out",
                 }}
                 onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0,0,0,0.06)`;
-                  if (COLORS.text === "#F5F5F7") (e.currentTarget as HTMLButtonElement).style.background = `rgba(255,255,255,0.1)`;
+                  (e.currentTarget as HTMLButtonElement).style.background = COLORS.text === "#F5F5F7" ? `rgba(255,255,255,0.1)` : `rgba(0,0,0,0.06)`;
                 }}
                 onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
               >
@@ -496,7 +493,6 @@ export function TripToolbar({
               </button>
             )}
 
-            {/* Delete Button */}
             {currentTrip && onDeleteTrip && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
@@ -512,10 +508,7 @@ export function TripToolbar({
                   transition: "all 0.2s ease-in-out",
                 }}
                 onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = `rgba(0, 0, 0, 0.06)`;
-                  if (COLORS.text === "#F5F5F7") {
-                    (e.currentTarget as HTMLButtonElement).style.background = `rgba(255, 255, 255, 0.1)`;
-                  }
+                  (e.currentTarget as HTMLButtonElement).style.background = COLORS.text === "#F5F5F7" ? `rgba(255,255,255,0.1)` : `rgba(0,0,0,0.06)`;
                 }}
                 onMouseOut={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.background = "transparent";
@@ -525,28 +518,30 @@ export function TripToolbar({
               </button>
             )}
 
-            {/* Settings Button */}
+            {/* ── Divider ── */}
+            <span style={{ width: 1, height: 20, background: COLORS.border, opacity: 0.5, flexShrink: 0 }} />
+
+            {/* ── Zone 3: System ── */}
             <button
               onClick={() => { setShowSettingsModal(true); setSettingsMsg(""); }}
               style={{
                 padding: "8px 16px",
                 borderRadius: 20,
-                border: `1px solid ${COLORS.border}`,
+                border: "none",
                 background: "transparent",
                 color: COLORS.text,
                 cursor: "pointer",
                 fontSize: 13,
                 fontWeight: 500,
-                opacity: 0.7,
+                opacity: 0.55,
                 transition: "all 0.2s ease-in-out",
               }}
               onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
-              onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.55"; }}
             >
               Settings
             </button>
 
-            {/* Sign Out Button */}
             {onLogout && (
               <button
                 onClick={onLogout}
@@ -559,14 +554,14 @@ export function TripToolbar({
                   cursor: "pointer",
                   fontSize: 13,
                   fontWeight: 400,
-                  opacity: 0.7,
+                  opacity: 0.55,
                   transition: "all 0.2s ease-in-out",
                 }}
                 onMouseOver={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
                 onMouseOut={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.55";
                 }}
               >
                 Sign Out

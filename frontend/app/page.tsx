@@ -158,6 +158,8 @@ function HomeContent({
   }, [router]);
 
   // Memoize calculated statistics
+  const [showStatsDetails, setShowStatsDetails] = useState(false);
+
   const totalDaysTravelledMemo = React.useMemo(() => calculateTotalDays(steps), [steps]);
   const tripDurationDaysMemo = React.useMemo(() => calculateTripDuration(currentTrip), [currentTrip]);
   const totalDaysAtDestinationsMemo = React.useMemo(() => calculateDaysAtDestinations(steps), [steps]);
@@ -676,7 +678,7 @@ function HomeContent({
       />
 
       {/* Map Container */}
-      <div className="map-container" style={{ position: "absolute", top: "70px", left: 0, right: steps.length > 0 ? "420px" : 0, bottom: 0, zIndex: 0 }}>
+      <div className="map-container" style={{ position: "absolute", top: "70px", left: 0, right: steps.length > 0 ? "420px" : 0, bottom: 0, zIndex: 0, transition: "right 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}>
         <TripViewer
           steps={steps}
           onMapClick={handleMapClick}
@@ -686,6 +688,58 @@ function HomeContent({
           fitTrigger={mapFitCounter}
           centerLocation={centerLocation}
         />
+
+        {/* Empty state — no trips at all */}
+        {!currentTrip && !loading && (
+          <div style={{
+            position: "absolute", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 10,
+            background: COLORS.cardBg,
+            backdropFilter: "saturate(180%) blur(20px)",
+            borderRadius: 20,
+            padding: "32px 40px",
+            textAlign: "center",
+            boxShadow: `0 12px 40px ${COLORS.shadowHeavy}`,
+            border: `1px solid ${COLORS.border}`,
+            maxWidth: 320,
+            pointerEvents: "none",
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✈️</div>
+            <div style={{ fontSize: 17, fontWeight: 600, color: COLORS.text, marginBottom: 8 }}>
+              No trips yet
+            </div>
+            <div style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 1.5 }}>
+              Create your first trip above to start tracking your adventures
+            </div>
+          </div>
+        )}
+
+        {/* Empty state — trip selected but no steps */}
+        {currentTrip && steps.length === 0 && !loading && (
+          <div style={{
+            position: "absolute", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 10,
+            background: COLORS.cardBg,
+            backdropFilter: "saturate(180%) blur(20px)",
+            borderRadius: 20,
+            padding: "32px 40px",
+            textAlign: "center",
+            boxShadow: `0 12px 40px ${COLORS.shadowHeavy}`,
+            border: `1px solid ${COLORS.border}`,
+            maxWidth: 320,
+            pointerEvents: "none",
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🗺️</div>
+            <div style={{ fontSize: 17, fontWeight: 600, color: COLORS.text, marginBottom: 8 }}>
+              No stops yet
+            </div>
+            <div style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 1.5 }}>
+              Click anywhere on the map to drop your first memory
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Trip Separation Panel */}
@@ -716,7 +770,10 @@ function HomeContent({
             pointerEvents: "auto",
             overflowY: "auto",
             overflowX: "hidden",
-            borderTop: `1px solid ${COLORS.separator}`
+            borderTop: `1px solid ${COLORS.separator}`,
+            transition: "opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            opacity: steps.length > 0 ? 1 : 0,
+            transform: steps.length > 0 ? "translateX(0)" : "translateX(20px)",
           }}
         >
           {/* Ask Questions Button - Top of Panel */}
@@ -781,29 +838,53 @@ function HomeContent({
             totalDistance={totalDistanceMemo}
           />
 
-          <div style={{
-            marginTop: 20,
-            marginBottom: 20,
-            borderTop: `1px solid ${COLORS.separator}`,
-            paddingTop: 20
-          }}>
-            <h3 style={{
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: "0.5px",
-              color: COLORS.textSecondary,
-              margin: "0 0 16px 0",
-              textTransform: "uppercase"
-            }}>
-              Detailed Analytics
-            </h3>
-            <EnhancedStatistics
-              steps={steps}
-              totalDistance={totalDistanceMemo}
-              tripDurationDays={tripDurationDaysMemo}
-              totalDaysTravelled={totalDaysTravelledMemo}
-            />
+          {/* Toggle for detailed analytics + timeline */}
+          <div style={{ marginTop: 16, borderTop: `1px solid ${COLORS.separator}`, paddingTop: 16 }}>
+            <button
+              onClick={() => setShowStatsDetails(v => !v)}
+              style={{
+                width: "100%",
+                padding: "8px 0",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 500,
+                color: COLORS.textSecondary,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                transition: "opacity 0.15s ease",
+                opacity: 0.7,
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.opacity = "1"; }}
+              onMouseOut={(e) => { e.currentTarget.style.opacity = "0.7"; }}
+            >
+              {showStatsDetails ? "▲ Less" : "▼ More details"}
+            </button>
           </div>
+
+          {showStatsDetails && (
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  letterSpacing: "0.5px",
+                  color: COLORS.textSecondary,
+                  margin: "0 0 16px 0",
+                  textTransform: "uppercase"
+                }}>
+                  Detailed Analytics
+                </h3>
+                <EnhancedStatistics
+                  steps={steps}
+                  totalDistance={totalDistanceMemo}
+                  tripDurationDays={tripDurationDaysMemo}
+                  totalDaysTravelled={totalDaysTravelledMemo}
+                />
+              </div>
 
           {/* Step Timeline */}
           {steps.length > 0 && (
@@ -849,6 +930,8 @@ function HomeContent({
                 ))}
               </div>
             </div>
+          )}
+            </>
           )}
 
           {/* Photo Gallery Button */}
