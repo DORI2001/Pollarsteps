@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useColors } from "@/lib/theme";
 
@@ -60,11 +60,34 @@ async function compressImage(file: File, maxDimension = 1600, quality = 0.82): P
 export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
   const COLORS = useColors();
   const [locationName, setLocationName] = useState("");
+  const [geocoding, setGeocoding] = useState(true);
   const [note, setNote] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+
+  // Auto-fill location name by reverse geocoding the clicked coordinates
+  useEffect(() => {
+    let cancelled = false;
+    setGeocoding(true);
+    fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}&accept-language=en`,
+      { headers: { "Accept-Language": "en" } }
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.address) {
+          const { city, town, village, county, state, country } = data.address;
+          const name = `${city || town || village || county || "Location"}, ${state || country || ""}`.replace(/,\s*$/, "");
+          setLocationName(name);
+        }
+      })
+      .catch(() => {/* silently ignore */})
+      .finally(() => { if (!cancelled) setGeocoding(false); });
+    return () => { cancelled = true; };
+  }, [coords.lat, coords.lng]);
 
   const handleImageUpload = async (file: File) => {
     setImageFile(file);
@@ -162,13 +185,13 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
         {/* Location Name Input */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: COLORS.text, marginBottom: 10, letterSpacing: "0.3px", textTransform: "uppercase" }}>
-            Place Name (Optional)
+            Place Name {geocoding && <span style={{ fontWeight: 400, opacity: 0.5, textTransform: "none", fontSize: 11 }}>detecting…</span>}
           </label>
           <input
             type="text"
             value={locationName}
             onChange={(e) => setLocationName(e.target.value)}
-            placeholder="e.g., Eiffel Tower, My Favorite Cafe"
+            placeholder={geocoding ? "Detecting location…" : "e.g., Eiffel Tower, My Favorite Cafe"}
             style={{
               width: "100%",
               padding: "12px 16px",
