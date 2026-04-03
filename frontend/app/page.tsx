@@ -569,7 +569,7 @@ function HomeContent({
 
       // Fly the map to the location suggested by the trip title
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api";
         const geo = await fetch(
           `${API_BASE}/geocoding/geocode?location=${encodeURIComponent(title)}`
         ).then((r) => r.json());
