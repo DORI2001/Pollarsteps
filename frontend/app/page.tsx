@@ -130,12 +130,26 @@ function HomeContent({
 
         try {
           const tripSteps = await api.getSteps(token, latestTrip.id);
-          // Set both steps and currentTrip with steps included
           setSteps(tripSteps);
           setCurrentTrip({ ...latestTrip, steps: tripSteps });
+
+          // Fly map to last visited location (last step) or trip title
+          if (tripSteps.length > 0) {
+            const last = tripSteps[tripSteps.length - 1];
+            setCenterLocation({ lat: last.lat, lng: last.lng, zoom: 10 });
+          } else if (latestTrip.title) {
+            try {
+              const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api";
+              const geo = await fetch(
+                `${API_BASE}/geocoding/geocode?location=${encodeURIComponent(latestTrip.title)}`
+              ).then((r) => r.json());
+              if (geo?.latitude && geo?.longitude) {
+                setCenterLocation({ lat: geo.latitude, lng: geo.longitude, zoom: 6 });
+              }
+            } catch { /* non-critical */ }
+          }
         } catch (stepsErr: any) {
           console.error("[Home] Failed to load steps, but trip exists:", stepsErr);
-          // Set trip without steps if loading steps fails
           setSteps([]);
           setCurrentTrip(latestTrip);
         }
@@ -603,6 +617,19 @@ function HomeContent({
     setTrips((prev: any[]) => prev.map((t: any) => t.id === updatedTrip.id ? { ...t, ...updatedTrip } : t));
     if (currentTrip?.id === updatedTrip.id) {
       setCurrentTrip((prev: any) => ({ ...prev, ...updatedTrip }));
+
+      // Re-geocode whenever the title changes
+      if (updatedTrip.title && updatedTrip.title !== currentTrip?.title) {
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api";
+        fetch(`${API_BASE}/geocoding/geocode?location=${encodeURIComponent(updatedTrip.title)}`)
+          .then((r) => r.json())
+          .then((geo) => {
+            if (geo?.latitude && geo?.longitude) {
+              setCenterLocation({ lat: geo.latitude, lng: geo.longitude, zoom: 6 });
+            }
+          })
+          .catch(() => { /* non-critical */ });
+      }
     }
   };
 

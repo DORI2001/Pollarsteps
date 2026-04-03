@@ -769,6 +769,19 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
           gap: 16, zIndex: 20,
           animation: "fadeIn 0.5s ease-out",
         }}>
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            style={{
+              position: "absolute", top: 16, right: 16,
+              background: "rgba(255,255,255,0.15)",
+              backdropFilter: "blur(10px)",
+              border: "none", borderRadius: "50%",
+              width: 36, height: 36, color: "white",
+              fontSize: 20, cursor: "pointer", lineHeight: 1,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >×</button>
           <div style={{ fontSize: 56 }}>✨</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "white" }}>
             {trip.title}
