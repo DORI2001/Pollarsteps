@@ -31,12 +31,12 @@ Add locations as you go, attach photos, get AI-powered recommendations, and shar
 | | |
 |---|---|
 | 🗺️ **Interactive Map** | Click anywhere to add a location and visualize your route |
-| ✈️ **Trip Management** | Create trips, set dates, share publicly or keep private |
-| 📍 **Location Steps** | Add notes and photos at each stop |
+| ✈️ **Trip Management** | Create, edit, and share trips — map flies to the right location automatically |
+| 📍 **Location Steps** | Add notes and photos at each stop — location auto-detected via reverse geocoding |
 | 🤖 **AI Recommendations** | Suggestions for restaurants, activities, and attractions |
 | 📖 **Stories & Reels** | Turn trips into shareable slideshows with music |
-| 📊 **Analytics** | Distance traveled, days per destination, trip stats |
-| 🌓 **Dark / Light Mode** | Automatic theme switching |
+| 📊 **Analytics** | Distance traveled, days per destination, trip stats (collapsible detail view) |
+| 🔒 **Security** | JWT auth, rate limiting on auth endpoints, security headers |
 
 ---
 
@@ -68,9 +68,11 @@ cp frontend/.env.example frontend/.env.local
 
 | File | Variable | Notes |
 |------|----------|-------|
-| `backend_app/.env` | `JWT_SECRET_KEY` | Any long random string |
-| `backend_app/.env` | `GEMINI_API_KEY` | AI features (optional) |
-| `frontend/.env.local` | `NEXT_PUBLIC_MAPBOX_TOKEN` | Map tiles (optional) |
+| `backend_app/.env` | `JWT_SECRET_KEY` | Generate: `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `backend_app/.env` | `DATABASE_URL` | SQLite (default) or `postgresql+asyncpg://...` for production |
+| `backend_app/.env` | `GEMINI_API_KEY` | AI recommendations (optional) |
+| `frontend/.env.local` | `NEXT_PUBLIC_API_BASE` | Backend URL, e.g. `http://localhost:8000/api` |
+| `frontend/.env.local` | `NEXT_PUBLIC_MAPBOX_TOKEN` | Satellite map tiles (optional) |
 
 ### 3 — Run
 
