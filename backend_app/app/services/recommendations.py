@@ -1,9 +1,8 @@
 """
 Recommendations Service
 Provides AI-powered recommendations for attractions, restaurants, activities
-based on current location using Gemini
+based on current location using Anthropic Claude
 """
-import asyncio
 import logging
 import os
 from typing import Optional
@@ -18,23 +17,20 @@ logger = logging.getLogger(__name__)
 
 
 def get_api_key() -> str:
-    """Get the Gemini API key from settings, environment, or .env file."""
-    # Try settings first
+    """Get the Anthropic API key from settings, environment, or .env file."""
     settings = get_settings()
-    key = getattr(settings, "gemini_api_key", None) or ""
+    key = getattr(settings, "anthropic_api_key", None) or ""
 
-    # Try environment variable
     if not key:
-        key = load_env_variable("GEMINI_API_KEY", default="")
-    
-    # Try .env file as fallback
+        key = load_env_variable("ANTHROPIC_API_KEY", default="")
+
     if not key:
         env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
-        key = load_from_env_file(env_path, "GEMINI_API_KEY") or ""
-    
+        key = load_from_env_file(env_path, "ANTHROPIC_API_KEY") or ""
+
     if not key:
-        logger.warning("No Gemini API key found — will return mock recommendations")
-    
+        logger.warning("No Anthropic API key found — will return mock recommendations")
+
     return key
 
 
@@ -191,7 +187,7 @@ def get_mock_recommendations(
     return RecommendationResponse(
         location=location_context.location_name,
         recommendations=mock_recommendations,
-        summary=f"✨ Recommended places and activities in {location_context.location_name} (Mock Data - Configure GEMINI_API_KEY for real recommendations)"
+        summary=f"✨ Recommended places and activities in {location_context.location_name} (Mock Data - Configure ANTHROPIC_API_KEY for real recommendations)"
     )
 
 
@@ -239,59 +235,41 @@ Focus on popular, highly-rated places. Include a mix of must-see attractions and
 
 
 async def call_llm_api(prompt: str) -> Optional[str]:
-    """Call Gemini via REST, trying models in order with one retry on rate-limit."""
+    """Call Anthropic Claude via the Messages API."""
     api_key = get_api_key()
     if not api_key:
         return None
 
-    # Try models in order — each has its own quota pool
-    models = [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-pro",
-    ]
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024},
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
     }
 
     async with aiohttp.ClientSession() as session:
-        for model in models:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            for attempt in range(2):  # up to 2 attempts per model
-                try:
-                    async with session.post(
-                        url,
-                        params={"key": api_key},
-                        json=payload,
-                        timeout=aiohttp.ClientTimeout(total=30),
-                    ) as resp:
-                        if resp.status == 429:
-                            # Rate limited — wait 2s then retry once
-                            logger.warning(f"Gemini rate limit on {model}, attempt {attempt+1}")
-                            if attempt == 0:
-                                await asyncio.sleep(2)
-                                continue
-                            else:
-                                break  # Try next model
-                        if resp.status != 200:
-                            err_text = await resp.text()
-                            logger.error(f"Gemini {model} error {resp.status}: {err_text[:200]}")
-                            break  # Try next model
-                        data = await resp.json()
-                        try:
-                            text = data["candidates"][0]["content"]["parts"][0]["text"]
-                            logger.info(f"Gemini response from {model}")
-                            return text
-                        except Exception:
-                            logger.error(f"Unexpected response structure from {model}")
-                            break
-                except Exception as e:
-                    logger.error(f"Gemini {model} call failed: {e}")
-                    break
-
-    logger.error("All Gemini models failed or rate-limited")
-    return None
+        try:
+            async with session.post(
+                "https://api.anthropic.com/v1/messages",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                if resp.status != 200:
+                    err_text = await resp.text()
+                    logger.error(f"Anthropic API error {resp.status}: {err_text[:200]}")
+                    return None
+                data = await resp.json()
+                text = data["content"][0]["text"]
+                logger.info("Anthropic Claude response received")
+                return text
+        except Exception as e:
+            logger.error(f"Anthropic API call failed: {e}")
+            return None
 
 
 def parse_recommendations(response_text: str) -> list[Recommendation]:

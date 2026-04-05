@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     
     # Gemini API configuration for recommendations
     gemini_api_key: Optional[str] = None
-    # Legacy Anthropic key (ignored but allowed to avoid env validation errors)
     anthropic_api_key: Optional[str] = None
     
     # Email configuration
