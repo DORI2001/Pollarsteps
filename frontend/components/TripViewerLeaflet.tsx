@@ -5,7 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { EditStepModal } from "./EditStepModal";
 import LocationSearch from "./LocationSearch";
-import RecommendationsPanel from "./RecommendationsPanel";
+import { RecommendationPanel } from "./RecommendationPanel";
 import { api } from "@/lib/api";
 
 type Step = {
@@ -566,20 +566,10 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
 
       {/* Recommendations Panel - Top Right */}
       {showRecommendations && selectedLocation && (
-        <div style={{
-          position: "absolute",
-          top: 16,
-          right: 16,
-          zIndex: 100,
-          maxWidth: 400,
-        }}>
-          <RecommendationsPanel
-            locationName={selectedLocation.name}
-            latitude={selectedLocation.lat}
-            longitude={selectedLocation.lon}
-            onClose={() => setShowRecommendations(false)}
-          />
-        </div>
+        <RecommendationPanel
+          currentLocation={{ name: selectedLocation.name, lat: selectedLocation.lat, lng: selectedLocation.lon }}
+          onClose={() => setShowRecommendations(false)}
+        />
       )}
     </>
   );

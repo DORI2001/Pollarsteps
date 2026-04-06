@@ -2,9 +2,10 @@
 
 import React, { useMemo } from "react";
 import { useColors } from "@/lib/theme";
+import { Step } from "@/lib/types";
 
 interface EnhancedStatsProps {
-  steps: any[];
+  steps: Step[];
   totalDistance: number;
   tripDurationDays: number;
   totalDaysTravelled: number;

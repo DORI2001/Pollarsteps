@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { api } from "@/lib/api";
 import { useColors } from "@/lib/theme";
+import { LocationRecommendations } from "@/lib/types";
 
 interface RecommendationPanelProps {
   currentLocation?: { name: string; lat: number; lng: number };
@@ -15,7 +16,7 @@ export function RecommendationPanel({
 }: RecommendationPanelProps) {
   const COLORS = useColors();
   const [question, setQuestion] = useState("");
-  const [recommendations, setRecommendations] = useState<any>(null);
+  const [recommendations, setRecommendations] = useState<LocationRecommendations | null>(null);
   const [loading, setLoading] = useState(false);
   const [recType, setRecType] = useState("all");
   const [budget, setBudget] = useState("moderate");
@@ -313,8 +314,7 @@ export function RecommendationPanel({
           {recommendations.recommendations &&
             recommendations.recommendations.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {recommendations.recommendations.map(
-                (rec: any, idx: number) => (
+              {recommendations.recommendations.map((rec, idx) => (
                   <div
                     key={idx}
                     style={{
@@ -324,42 +324,21 @@ export function RecommendationPanel({
                       border: `1px solid ${COLORS.border}`,
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: COLORS.text,
-                        marginBottom: 4,
-                      }}
-                    >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text, marginBottom: 4 }}>
                       {rec.title}
                     </div>
                     {rec.description && (
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: COLORS.textSecondary,
-                          lineHeight: 1.4,
-                          marginBottom: 4,
-                        }}
-                      >
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.4, marginBottom: 4 }}>
                         {rec.description}
                       </div>
                     )}
-                    {rec.rating && (
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: COLORS.warning,
-                          fontWeight: 600,
-                        }}
-                      >
-                        ⭐ {rec.rating}
+                    {rec.why_recommended && (
+                      <div style={{ fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>
+                        {rec.why_recommended}
                       </div>
                     )}
                   </div>
-                )
-              )}
+                ))}
             </div>
           ) : (
             <div

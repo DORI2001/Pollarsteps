@@ -6,19 +6,7 @@ import { filterTrips, TripFilter } from "@/lib/search";
 import { useColors } from "@/lib/theme";
 import { api, session as authSession } from "@/lib/api";
 import { StoryReelModal } from "@/components/StoryReelModal";
-
-interface Trip {
-  id: string;
-  title: string;
-  description?: string;
-  start_date?: string;
-  end_date?: string;
-  created_at?: string;
-  total_days_travelled?: number;
-  steps?: any[];
-  total_steps?: number;
-  total_distance?: number;
-}
+import { Trip, Step } from "@/lib/types";
 
 interface TripToolbarProps {
   trips: Trip[];
@@ -26,7 +14,7 @@ interface TripToolbarProps {
   onSelectTrip: (trip: Trip) => void;
   onCreateTrip: (title: string, description: string, startDate: string, endDate?: string) => Promise<void>;
   onDeleteTrip?: (tripId: string) => Promise<void>;
-  onUpdateTrip?: (trip: any) => void;
+  onUpdateTrip?: (trip: Trip) => void;
   onLogout?: () => void;
   loading?: boolean;
 }
@@ -115,7 +103,7 @@ export function TripToolbar({
       title: currentTrip.title,
       description: currentTrip.description,
       start_date: currentTrip.start_date,
-      steps: (currentTrip.steps || []).map((step: any, index: number) => ({
+      steps: (currentTrip.steps || []).map((step: Step, index: number) => ({
         id: step.id,
         lat: step.lat,
         lng: step.lng,

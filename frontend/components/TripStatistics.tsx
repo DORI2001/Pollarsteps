@@ -2,16 +2,10 @@
 
 import React from "react";
 import { useColors } from "@/lib/theme";
+import { Trip } from "@/lib/types";
 
 interface TripStatisticsProps {
-  trip: {
-    id: string;
-    title: string;
-    description?: string;
-    start_date?: string;
-    end_date?: string;
-    steps?: any[];
-  };
+  trip: Trip;
   totalDaysTravelled?: number;
   tripDurationDays?: number;
   totalDaysAtDestinations?: number;

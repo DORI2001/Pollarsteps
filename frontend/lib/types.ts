@@ -11,14 +11,14 @@ export interface User {
 
 export interface Step {
   id: string;
-  trip_id: string;
+  trip_id?: string;
   lat: number;
   lng: number;
   timestamp: string;
   location_name?: string;
   note?: string;
   duration_days?: number;
-  image_url?: string | null;
+  image_url?: string;
   client_uuid?: string;
 }
 
@@ -34,6 +34,7 @@ export interface Trip {
   updated_at?: string;
   total_distance?: number;
   total_steps?: number;
+  total_days_travelled?: number;
   steps?: Step[];
   route_geojson?: GeoJSON;
   share_token?: string;
