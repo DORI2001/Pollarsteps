@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     refresh_token_expire_minutes: int = 60 * 24 * 7
     ai_chronicler_url: Optional[str] = None
     
-    # Gemini API configuration for recommendations
+    # Gemini API — used for Ask Questions / recommendations
     gemini_api_key: Optional[str] = None
-    anthropic_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None  # reserved, not currently used
     
     # Email configuration
     smtp_host: str = "smtp.gmail.com"
