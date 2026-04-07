@@ -3,7 +3,7 @@
 # 🗺️ Pollarsteps
 
 **Track your travels on an interactive map |**
-Add locations as you go, attach photos, get AI-powered recommendations, and share your trips with friends.
+Add locations as you go, attach photos, get AI-powered recommendations, and share your trips with friends
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-square&logo=next.js)](https://nextjs.org)
