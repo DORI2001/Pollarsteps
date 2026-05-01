@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
@@ -9,7 +9,7 @@ from app.services import trips as trip_service
 from app.models.trip import Trip
 from app.models.user import User
 from app.models.collaborator import TripCollaborator, CollaboratorRole
-from app.utils.errors import NotFoundError, check_ownership
+from app.utils.errors import NotFoundError, ForbiddenError, AppException, check_ownership
 from pydantic import BaseModel as PydanticBaseModel
 
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -51,7 +51,7 @@ async def update_trip(trip_id: UUID, payload: TripUpdate, session: AsyncSession 
 async def delete_trip(trip_id: UUID, session: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     result = await trip_service.delete_trip(trip_id, session, current_user)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found or you don't have permission")
+        raise NotFoundError("Trip")
     return result
 
 
@@ -72,7 +72,7 @@ async def split_trip(
             new_trip=TripRead.model_validate(new),
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise AppException(detail=str(e))
 
 
 @router.post("/{trip_id}/share")
@@ -81,9 +81,9 @@ async def generate_share_link(trip_id: UUID, session: AsyncSession = Depends(get
     result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
     trip = result.scalar_one_or_none()
     if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        raise NotFoundError("Trip")
     if trip.user_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Forbidden")
+        raise ForbiddenError()
 
     # Generate token if not already set
     if not trip.share_token:
@@ -101,9 +101,9 @@ async def revoke_share_link(trip_id: UUID, session: AsyncSession = Depends(get_d
     result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
     trip = result.scalar_one_or_none()
     if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        raise NotFoundError("Trip")
     if trip.user_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Forbidden")
+        raise ForbiddenError()
 
     trip.share_token = None
     trip.is_public = False
@@ -119,13 +119,12 @@ async def get_shared_trip(share_token: str, session: AsyncSession = Depends(get_
     )
     trip = result.scalar_one_or_none()
     if not trip:
-        raise HTTPException(status_code=404, detail="Shared trip not found or link expired")
+        raise NotFoundError("Shared trip")
 
-    # Load steps
     from app.services.trips import get_trip_with_steps
     trip_data = await get_trip_with_steps(trip.id, session)
     if not trip_data:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        raise NotFoundError("Trip")
     return trip_data
 
 
@@ -157,16 +156,16 @@ async def invite_collaborator(
     trip_result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
     trip = trip_result.scalar_one_or_none()
     if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        raise NotFoundError("Trip")
     if trip.user_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Only the trip owner can invite collaborators")
+        raise ForbiddenError("Only the trip owner can invite collaborators")
 
     user_result = await session.execute(select(User).where(User.username == payload.username))
     invited_user = user_result.scalar_one_or_none()
     if not invited_user:
-        raise HTTPException(status_code=404, detail=f"User '{payload.username}' not found")
+        raise NotFoundError(f"User '{payload.username}'")
     if invited_user.id == str(current_user.id):
-        raise HTTPException(status_code=400, detail="Cannot invite yourself")
+        raise AppException(detail="Cannot invite yourself")
 
     existing = await session.execute(
         select(TripCollaborator).where(
@@ -175,7 +174,7 @@ async def invite_collaborator(
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="User is already a collaborator")
+        raise AppException(detail="User is already a collaborator", status_code=409)
 
     collab = TripCollaborator(trip_id=str(trip_id), user_id=invited_user.id, role=payload.role)
     session.add(collab)
@@ -200,9 +199,9 @@ async def list_collaborators(
     trip_result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
     trip = trip_result.scalar_one_or_none()
     if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        raise NotFoundError("Trip")
     if trip.user_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Forbidden")
+        raise ForbiddenError()
 
     result = await session.execute(
         select(TripCollaborator, User)
@@ -224,9 +223,9 @@ async def remove_collaborator(
     trip_result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
     trip = trip_result.scalar_one_or_none()
     if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        raise NotFoundError("Trip")
     if trip.user_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Only the trip owner can remove collaborators")
+        raise ForbiddenError("Only the trip owner can remove collaborators")
 
     result = await session.execute(
         select(TripCollaborator).where(
@@ -236,6 +235,6 @@ async def remove_collaborator(
     )
     collab = result.scalar_one_or_none()
     if not collab:
-        raise HTTPException(status_code=404, detail="Collaborator not found")
+        raise NotFoundError("Collaborator")
     await session.delete(collab)
     await session.commit()

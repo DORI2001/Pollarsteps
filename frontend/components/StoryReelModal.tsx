@@ -3,11 +3,19 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useColors } from "@/lib/theme";
 import { api, session as authSession } from "@/lib/api";
+import { Trip } from "@/lib/types";
 
-interface Trip {
+interface SongResult {
   id: string;
   title: string;
-  steps?: any[];
+  provider: string;
+  thumbnail?: string;
+  channel?: string;
+}
+
+interface CreatedStory {
+  id: string;
+  share_token?: string;
 }
 
 interface StoryReelModalProps {
@@ -23,20 +31,20 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
 
   // Song search
   const [songQuery, setSongQuery] = useState("");
-  const [songResults, setSongResults] = useState<any[]>([]);
-  const [songSelected, setSongSelected] = useState<any | null>(null);
+  const [songResults, setSongResults] = useState<SongResult[]>([]);
+  const [songSelected, setSongSelected] = useState<SongResult | null>(null);
   const [songSearching, setSongSearching] = useState(false);
   const [songError, setSongError] = useState("");
-  const searchTimerRef = useRef<any>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clip selection
   const [clipDuration, setClipDuration] = useState<15 | 30>(15);
   const [startTime, setStartTime] = useState(0);
-  const [maxStartTime, setMaxStartTime] = useState(225); // default: 4min - 15s
+  const [maxStartTime, setMaxStartTime] = useState(225);
 
   // Story creation
   const [creating, setCreating] = useState(false);
-  const [createdStory, setCreatedStory] = useState<any | null>(null);
+  const [createdStory, setCreatedStory] = useState<CreatedStory | null>(null);
   const [storyError, setStoryError] = useState("");
   const [shareLink, setShareLink] = useState("");
 
@@ -45,7 +53,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [reelFinished, setReelFinished] = useState(false);
   const [copied, setCopied] = useState(false);
-  const slideTimerRef = useRef<any>(null);
+  const slideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reelContainerRef = useRef<HTMLDivElement>(null);
 
   const steps = trip.steps || [];
@@ -64,8 +72,8 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
         if (!res.ok) throw new Error("Music search failed. Make sure your YouTube API key is set.");
         const data = await res.json();
         setSongResults(data.items || []);
-      } catch (err: any) {
-        setSongError(err?.message || "Search failed");
+      } catch (err: unknown) {
+        setSongError(err instanceof Error ? err.message : "Search failed");
         setSongResults([]);
       } finally {
         setSongSearching(false);
@@ -78,7 +86,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
     searchSongs(q);
   };
 
-  const handleSelectSong = (item: any) => {
+  const handleSelectSong = (item: SongResult) => {
     setSongSelected(item);
     // Reset start time when new song selected
     setStartTime(0);
@@ -98,7 +106,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
     setCreating(true);
     setStoryError("");
     try {
-      const story = await (api as any).createStory(token, trip.id, {
+      const story = await (api as unknown as { createStory: (token: string, tripId: string, opts: object) => Promise<CreatedStory> }).createStory(token, trip.id, {
         includeMap: true,
         shareable: true,
         maxSlides: 15,
@@ -114,8 +122,8 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
         setShareLink(`${window.location.origin}/api/stories/public/${story.share_token}`);
       }
       setModalStep("preview");
-    } catch (err: any) {
-      setStoryError(err?.message || "Failed to create reel");
+    } catch (err: unknown) {
+      setStoryError(err instanceof Error ? err.message : "Failed to create reel");
     } finally {
       setCreating(false);
     }
