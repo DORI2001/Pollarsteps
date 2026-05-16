@@ -35,6 +35,10 @@ export interface Trip {
   total_distance?: number;
   total_steps?: number;
   total_days_travelled?: number;
+  trip_duration_days?: number;
+  total_days_at_destinations?: number;
+  location_count?: number;
+  average_days_per_location?: number;
   steps?: Step[];
   route_geojson?: GeoJSON;
   share_token?: string;

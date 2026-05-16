@@ -14,8 +14,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+backend_app/lib/
+backend_app/lib64/
+# Keep frontend/lib tracked
+!frontend/lib/
 parts/
 sdist/
 var/

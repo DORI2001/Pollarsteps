@@ -26,6 +26,7 @@ export function ModalShell({ onClose, maxWidth = 420, children }: ModalShellProp
         style={{
           background: COLORS.surface, borderRadius: 28, padding: 36,
           maxWidth, width: "90%",
+          maxHeight: "90vh", overflowY: "auto",
           boxShadow: "0 25px 50px rgba(0,0,0,0.15)",
         }}
         onClick={(e) => e.stopPropagation()}

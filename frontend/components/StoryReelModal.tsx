@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useReelPlayback } from "@/hooks/useReelPlayback";
 import { useColors } from "@/lib/theme";
 import { api, session as authSession } from "@/lib/api";
 import { Trip } from "@/lib/types";
@@ -49,16 +50,14 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
   const [shareLink, setShareLink] = useState("");
 
   // Reel playback
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [reelFinished, setReelFinished] = useState(false);
   const [copied, setCopied] = useState(false);
-  const slideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reelContainerRef = useRef<HTMLDivElement>(null);
 
   const steps = trip.steps || [];
   const numSlides = Math.max(steps.length, 1);
   const slideDurationMs = (clipDuration * 1000) / numSlides;
+
+  const { currentSlide, isPlaying, reelFinished, startPlaying, reset: resetReel } = useReelPlayback(numSlides, slideDurationMs);
 
   // ---- Song search ----
   const searchSongs = useCallback((query: string) => {
@@ -129,26 +128,10 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
     }
   };
 
-  // ---- Reel playback ----
-  const startPlaying = () => {
-    setCurrentSlide(0);
-    setReelFinished(false);
-    setIsPlaying(true);
+  const handlePlay = () => {
+    startPlaying();
     setModalStep("playing");
   };
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    if (currentSlide >= numSlides) {
-      setIsPlaying(false);
-      setReelFinished(true);
-      return;
-    }
-    slideTimerRef.current = setTimeout(() => {
-      setCurrentSlide(prev => prev + 1);
-    }, slideDurationMs);
-    return () => { if (slideTimerRef.current) clearTimeout(slideTimerRef.current); };
-  }, [isPlaying, currentSlide, slideDurationMs, numSlides]);
 
   const handleCopyLink = async () => {
     if (!shareLink) return;
@@ -498,7 +481,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
           <div style={{ padding: "24px 28px 28px 28px" }}>
             {/* Play button */}
             <button
-              onClick={startPlaying}
+              onClick={handlePlay}
               style={{
                 width: "100%", padding: "14px 0",
                 borderRadius: 14, border: "none",
@@ -628,7 +611,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
         <button
           onClick={() => {
             setModalStep("preview");
-            setIsPlaying(false);
+            resetReel();
           }}
           style={{
             background: "rgba(255,255,255,0.2)",
@@ -799,7 +782,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
           </div>
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
             <button
-              onClick={startPlaying}
+              onClick={handlePlay}
               style={{
                 padding: "12px 24px", borderRadius: 24,
                 background: "white", color: "#000",

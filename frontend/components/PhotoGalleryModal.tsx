@@ -3,11 +3,13 @@
 import React from "react";
 import { useColors } from "@/lib/theme";
 import { PhotoGallery } from "@/components/PhotoGallery";
-import { useTripContext } from "@/providers/TripProvider";
+import { useCurrentTrip } from "@/hooks/useCurrentTrip";
+import { useTripUI } from "@/hooks/useTripUI";
 
 export function PhotoGalleryModal() {
   const COLORS = useColors();
-  const { currentTrip, steps, showPhotoGallery, setShowPhotoGallery } = useTripContext();
+  const { currentTrip, steps } = useCurrentTrip();
+  const { showPhotoGallery, setShowPhotoGallery } = useTripUI();
 
   if (!showPhotoGallery) return null;
 

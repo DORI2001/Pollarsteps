@@ -7,6 +7,8 @@ import { EditStepModal } from "./EditStepModal";
 import LocationSearch from "./LocationSearch";
 import { RecommendationPanel } from "./RecommendationPanel";
 import { api } from "@/lib/api";
+import { resolveLocationName } from "@/lib/geocoding";
+import { buildStepPopup } from "@/lib/stepPopup";
 
 type Step = {
   id: string;
@@ -29,26 +31,6 @@ type TripViewerLeafletProps = {
   centerLocation?: { lat: number; lng: number; zoom?: number } | null;
 };
 
-// Reverse geocode coordinates to location name
-async function getLocationName(lat: number, lng: number): Promise<string> {
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`,
-      { headers: { 'Accept-Language': 'en' } }
-    );
-    const data = await response.json();
-    
-    // Extract city, town, or location name
-    if (data.address) {
-      const { city, town, village, county, state, country } = data.address;
-      return `${city || town || village || county || 'Location'}, ${state || country || ''}`.replace(/,\s*$/, '');
-    }
-    return ''; // Return empty string on fallback, no coordinates
-  } catch (error) {
-    // Geocoding failed silently
-    return ''; // Return empty string on failure, no coordinates
-  }
-}
 
 function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token, fitTrigger, centerLocation }: TripViewerLeafletProps) {
   const mapRef = useRef<L.Map | null>(null);
@@ -199,7 +181,7 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
     // Fetch all geocoded location names (regardless of custom names)
     Promise.all(
       steps.map((step) => 
-        getLocationName(step.lat, step.lng)
+        resolveLocationName(step.lat, step.lng)
       )
     ).then((geocodedNames) => {
       // Ensure map still exists before adding layers
@@ -220,81 +202,7 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
         // Create SVG icon for marker
         const svgIcon = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='${encodeURIComponent(color)}' stroke='white' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6' fill='white'/%3E%3C/svg%3E`;
 
-        // Format date nicely
-        const date = new Date(step.timestamp);
-        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-        
-        // Create enhanced popup content
-        const isStart = index === 0;
-        const isEnd = index === steps.length - 1;
-        
-        let popupContent = `
-          <div style="font-family: -apple-system, sans-serif; padding: 12px; min-width: 280px; border-radius: 8px; background: #FFFFFF;">
-            <div style="font-weight: 700; color: #1D1D1D; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-              <span>📍</span>
-              <span>${step.location_name || "Place " + (index + 1)}</span>
-        `;
-        
-        if (isStart) {
-          popupContent += `<span style="display: inline-block; background: #34C759; color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-left: auto;">START</span>`;
-        } else if (isEnd) {
-          popupContent += `<span style="display: inline-block; background: #FF3B30; color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-left: auto;">END</span>`;
-        }
-        
-        popupContent += `
-            </div>
-          <div style="color: #666; font-size: 12px; line-height: 1.8; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span>📅</span>
-              <span>${dateStr}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span>🕐</span>
-              <span>${timeStr}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span>📍</span>
-              <span>Stop ${index + 1} of ${steps.length}</span>
-            </div>
-      `;
-      
-      if (step.duration_days && step.duration_days > 0) {
-        popupContent += `
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span>📌</span>
-              <span>${step.duration_days} day${step.duration_days !== 1 ? 's' : ''}</span>
-            </div>
-        `;
-      }
-      
-      popupContent += `
-            <div style="font-size: 11px; color: #666; grid-column: 1 / -1; padding: 6px 0; border-top: 1px solid #E5E5EA; margin-top: 4px; padding-top: 8px;">
-              ${step.note ? `<div style="margin-bottom: 8px; padding: 8px; background: #F5F5F7; border-left: 3px solid #667eea; border-radius: 4px;"><strong>Memory:</strong> ${step.note.substring(0, 100)}${step.note.length > 100 ? '...' : ''}</div>` : ''}
-              ${geocodedLocationName ? `<div style="display: flex; align-items: center; gap: 4px;">
-                <span>🗺️</span>
-                <span style="font-weight: 500;">${geocodedLocationName}</span>
-              </div>` : ''}
-            </div>
-      `;
-      
-      if (step.image_url) {
-        popupContent += `
-          <div style="margin-top: 8px; border-radius: 4px; overflow: hidden; max-height: 120px;">
-            <img src="${step.image_url}" alt="Memory" style="width: 100%; height: auto; max-height: 120px; object-fit: cover;" />
-          </div>
-        `;
-      }
-      
-      // Add edit/delete buttons
-      popupContent += `
-            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E5EA; display: flex; gap: 8px;">
-              <button class="edit-step-btn" data-step-id="${step.id}" style="flex: 1; padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;">Edit</button>
-              <button class="delete-step-btn" data-step-id="${step.id}" style="flex: 1; padding: 8px 12px; background: #FF3B30; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;">Delete</button>
-            </div>
-      `;
-      
-      popupContent += `</div>`;
+        const popupContent = buildStepPopup(step, index, steps.length, geocodedLocationName);
 
       const marker = L.marker([step.lat, step.lng], {
         icon: L.icon({

@@ -4,15 +4,17 @@ import React from "react";
 import { useColors } from "@/lib/theme";
 import { TripViewer } from "@/components/TripViewer";
 import { session } from "@/lib/api";
-import { useTripContext } from "@/providers/TripProvider";
+import { useCurrentTrip } from "@/hooks/useCurrentTrip";
+import { useTrips } from "@/hooks/useTrips";
+import { useStepEditor } from "@/hooks/useStepEditor";
+import { useTripUI } from "@/hooks/useTripUI";
 
 export function MapSection() {
   const COLORS = useColors();
-  const {
-    currentTrip, steps, loading,
-    handleMapClick, handleStepsChange,
-    mapFitCounter, centerLocation,
-  } = useTripContext();
+  const { currentTrip, steps, handleStepsChange } = useCurrentTrip();
+  const { loading } = useTrips();
+  const { handleMapClick } = useStepEditor();
+  const { mapFitCounter, centerLocation } = useTripUI();
 
   return (
     <div

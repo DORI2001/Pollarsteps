@@ -2,11 +2,13 @@
 
 import React from "react";
 import { useColors } from "@/lib/theme";
-import { useTripContext } from "@/providers/TripProvider";
+import { useAuth } from "@/hooks/useAuth";
+import { useTrips } from "@/hooks/useTrips";
 
 export function WelcomeScreen() {
   const COLORS = useColors();
-  const { user, newTripTitle, setNewTripTitle, handleCreateTrip, handleLogout } = useTripContext();
+  const { user, handleLogout } = useAuth();
+  const { newTripTitle, setNewTripTitle, handleCreateTrip } = useTrips();
 
   return (
     <div style={{ minHeight: "100vh", background: COLORS.background }}>

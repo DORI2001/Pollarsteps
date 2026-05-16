@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, session } from "@/lib/api";
+import { validatePassword, passwordRequirementsMessage } from "@/lib/api/validation";
 import { useColors } from "@/lib/theme";
+import { useAuthFlow } from "@/hooks/useAuthFlow";
 
 export default function SignUp() {
-  const router = useRouter();
   const COLORS = useColors();
+  const authFlow = useAuthFlow();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -41,23 +41,14 @@ export default function SignUp() {
       setLoading(false);
       return;
     }
-    if (!password || password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (!validatePassword(password)) {
+      setError(passwordRequirementsMessage());
       setLoading(false);
       return;
     }
 
     try {
-        const tokens = await api.register(email.trim(), password, username.trim());
-        // Persist both access and refresh tokens so auto-refresh can work
-        session.setTokens(tokens.access_token, tokens.refresh_token);
-
-      // Fetch and store user info
-      const user = await api.getCurrentUser(tokens.access_token);
-      session.setUser(user);
-
-      // Redirect to home
-      router.push("/");
+      await authFlow.register(email.trim(), password, username.trim());
     } catch (err: any) {
       const message =
         err.message || err.detail || "Sign up failed. Please try again.";

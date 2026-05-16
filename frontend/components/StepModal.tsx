@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useColors } from "@/lib/theme";
+import { ModalShell } from "@/components/modals/ModalShell";
 
 interface StepModalProps {
   coords: { lat: number; lng: number };
@@ -159,13 +160,7 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
-      <style>{`
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .modal-content { animation: slideUp 0.3s ease-out; }
-      `}</style>
-
-      <div className="modal-content" style={{ background: COLORS.surface, borderRadius: 20, padding: 32, boxShadow: "0 25px 50px rgba(0, 0, 0, 0.15)", maxWidth: 450, width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
+    <ModalShell onClose={onClose} maxWidth={450}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: COLORS.text, margin: 0 }}>Add Memory</h2>
@@ -342,7 +337,6 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
             {loading ? "Saving..." : "Save Memory"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

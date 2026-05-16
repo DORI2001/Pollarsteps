@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, session } from "@/lib/api";
+import { useAuthFlow } from "@/hooks/useAuthFlow";
 import { useColors } from "@/lib/theme";
 
 export default function SignIn() {
-  const router = useRouter();
   const COLORS = useColors();
+  const authFlow = useAuthFlow();
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,16 +31,7 @@ export default function SignIn() {
     }
 
     try {
-      const tokens = await api.login(emailOrUsername.trim(), password);
-      // Persist both access and refresh tokens so auto-refresh can work
-      session.setTokens(tokens.access_token, tokens.refresh_token);
-
-      // Fetch and store user info
-      const user = await api.getCurrentUser(tokens.access_token);
-      session.setUser(user);
-
-      // Redirect to home
-      router.push("/");
+      await authFlow.login(emailOrUsername.trim(), password);
     } catch (err: any) {
       const message =
         err.message || err.detail || "Sign in failed. Please check your credentials and try again.";

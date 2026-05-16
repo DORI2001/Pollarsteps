@@ -11,8 +11,14 @@ import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { StatsPanel } from "@/components/StatsPanel";
 import { PhotoGalleryModal } from "@/components/PhotoGalleryModal";
 import { MapSection } from "@/components/MapSection";
-import { TripProvider, useTripContext } from "@/providers/TripProvider";
+import { TripProvider } from "@/providers/TripProvider";
+import { useAuth } from "@/hooks/useAuth";
+import { useTrips } from "@/hooks/useTrips";
+import { useCurrentTrip } from "@/hooks/useCurrentTrip";
+import { useStepEditor } from "@/hooks/useStepEditor";
+import { useTripUI } from "@/hooks/useTripUI";
 import { session, api } from "@/lib/api";
+import { resolveLocation } from "@/lib/geocoding";
 
 export default function Home() {
   return (
@@ -26,14 +32,20 @@ export default function Home() {
 
 function HomeContent() {
   const COLORS = useColors();
+  const { setUser, handleLogout } = useAuth();
   const {
-    loading, currentTrip, trips,
-    setUser, setTrips, setCurrentTrip, setSteps, setLoading, setCenterLocation,
-    handleCreateTripFromToolbar, handleUpdateTrip, handleDeleteTrip, handleSelectTrip, handleLogout,
-    handleSplitTrip, handleCancelStep, handleAddStep,
-    steps, showStepModal, selectedMapCoords,
-    showRecommendations, recommendationLocation, setShowRecommendations,
-  } = useTripContext();
+    trips, loading, setTrips, setLoading,
+    handleCreateTripFromToolbar, handleSelectTrip, handleDeleteTrip, handleSplitTrip,
+  } = useTrips();
+  const {
+    currentTrip, setCurrentTrip, steps, setSteps, handleUpdateTrip,
+  } = useCurrentTrip();
+  const {
+    showStepModal, selectedMapCoords, handleCancelStep, handleAddStep,
+  } = useStepEditor();
+  const {
+    showRecommendations, setShowRecommendations, recommendationLocation, setCenterLocation,
+  } = useTripUI();
 
   // Load user + trips on mount
   useEffect(() => {
@@ -44,8 +56,6 @@ function HomeContent() {
     setUser(user);
 
     const loadTrips = async () => {
-      const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api";
-
       try {
         const trips = await api.getTrips(token);
 
@@ -64,19 +74,12 @@ function HomeContent() {
           setSteps(tripSteps);
           setCurrentTrip({ ...latestTrip, steps: tripSteps });
 
-          // Fly to last visited location
           if (tripSteps.length > 0) {
             const last = tripSteps[tripSteps.length - 1];
             setCenterLocation({ lat: last.lat, lng: last.lng, zoom: 10 });
           } else if (latestTrip.title) {
-            try {
-              const geo = await fetch(
-                `${API_BASE}/geocoding/geocode?location=${encodeURIComponent(latestTrip.title)}`
-              ).then((r) => r.json());
-              if (geo?.latitude && geo?.longitude) {
-                setCenterLocation({ lat: geo.latitude, lng: geo.longitude, zoom: 6 });
-              }
-            } catch { /* non-critical */ }
+            const loc = await resolveLocation(latestTrip.title);
+            if (loc) setCenterLocation(loc);
           }
         } catch {
           setSteps([]);
