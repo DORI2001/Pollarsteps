@@ -5,8 +5,9 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.models.step import Step
+from app.models.step_image import StepImage
 from app.models.trip import Trip
-from app.schemas.step import StepCreate, StepRead, StepUpdate
+from app.schemas.step import StepCreate, StepRead, StepUpdate, StepImageRead
 
 
 async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession) -> StepRead:
@@ -113,6 +114,25 @@ async def update_step(step_id: UUID, payload: StepUpdate, session: AsyncSession,
         duration_days=step.duration_days,
         images=[StepImageRead(id=img.id, image_url=img.image_url, caption=img.caption, order_index=img.order_index) for img in step.images],
     )
+
+
+async def add_step_image(step_id: UUID, image_url: str, caption: str | None, owner_id: str, session: AsyncSession) -> StepImageRead:
+    step = await session.get(Step, str(step_id))
+    if not step:
+        raise HTTPException(status_code=404, detail="Step not found")
+    trip = await session.get(Trip, step.trip_id)
+    if not trip or str(trip.user_id) != owner_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    result = await session.execute(
+        select(StepImage).where(StepImage.step_id == str(step_id)).order_by(StepImage.order_index.desc())
+    )
+    last = result.scalars().first()
+    new_order = (last.order_index + 1) if last else 0
+    img = StepImage(step_id=str(step_id), image_url=image_url, caption=caption, order_index=new_order)
+    session.add(img)
+    await session.commit()
+    await session.refresh(img)
+    return StepImageRead(id=img.id, image_url=img.image_url, caption=img.caption, order_index=img.order_index)
 
 
 async def delete_step(step_id: UUID, session: AsyncSession, current_user) -> dict:

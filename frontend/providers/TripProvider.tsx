@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { session, api } from "@/lib/api";
 import { resolveLocation } from "@/lib/geocoding";
@@ -128,6 +128,10 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   // Current trip slice
   const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
+  const tripsRef = useRef<Trip[]>([]);
+  const currentTripRef = useRef<Trip | null>(null);
+  tripsRef.current = trips;
+  currentTripRef.current = currentTrip;
 
   // Step editor slice
   const [showStepModal, setShowStepModal] = useState(false);
@@ -139,6 +143,51 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   const [recommendationLocation, setRecommendationLocation] = useState<RecommendationLocation | null>(null);
   const [mapFitCounter, setMapFitCounter] = useState(0);
   const [centerLocation, setCenterLocation] = useState<CenterLocation | null>(null);
+
+  // ── Initialization ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const token = session.getToken();
+    const user = session.getUser();
+    if (!token) { setLoading(false); return; }
+
+    setUser(user);
+
+    const init = async () => {
+      try {
+        const allTrips = await api.getTrips(token);
+        if (!allTrips || allTrips.length === 0) {
+          setTrips([]);
+          setCurrentTrip(null);
+          setSteps([]);
+          return;
+        }
+        setTrips(allTrips);
+        const latest = allTrips[allTrips.length - 1];
+        try {
+          const tripSteps = await api.getSteps(token, latest.id);
+          setSteps(tripSteps);
+          setCurrentTrip({ ...latest, steps: tripSteps });
+          if (tripSteps.length > 0) {
+            const last = tripSteps[tripSteps.length - 1];
+            setCenterLocation({ lat: last.lat, lng: last.lng, zoom: 10 });
+          } else if (latest.title) {
+            const loc = await resolveLocation(latest.title);
+            if (loc) setCenterLocation(loc);
+          }
+        } catch {
+          setSteps([]);
+          setCurrentTrip(latest);
+        }
+      } catch (err) {
+        console.error("[TripProvider] Failed to initialize:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    init();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth callbacks ──────────────────────────────────────────────────────────
 
@@ -217,27 +266,26 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     if (!token) return;
     try {
       await api.deleteTrip(token, tripId);
-      setTrips((prev) => {
-        const updated = prev.filter((t) => t.id !== tripId);
-        setCurrentTrip((currentPrev) => {
-          if (currentPrev?.id !== tripId) return currentPrev;
-          if (updated.length > 0) {
-            api.getTrip(token, updated[0].id)
-              .then((nextTrip) => {
-                setCurrentTrip(nextTrip);
-                setSteps(nextTrip.steps || []);
-              })
-              .catch(() => {
-                setCurrentTrip(updated[0]);
-                setSteps([]);
-              });
-            return currentPrev;
-          }
-          setSteps([]);
-          return null;
-        });
-        return updated;
-      });
+      const remaining = tripsRef.current.filter((t) => t.id !== tripId);
+      setTrips(remaining);
+
+      if (currentTripRef.current?.id !== tripId) return;
+
+      if (remaining.length === 0) {
+        setCurrentTrip(null);
+        setSteps([]);
+        return;
+      }
+
+      const next = remaining[0];
+      try {
+        const tripData = await api.getTrip(token, next.id);
+        setCurrentTrip(tripData);
+        setSteps(tripData.steps || []);
+      } catch {
+        setCurrentTrip(next);
+        setSteps([]);
+      }
     } catch (err: any) {
       console.error("Delete failed:", err);
       alert(`Delete failed: ${err?.message || err?.toString() || "Unknown error"}`);

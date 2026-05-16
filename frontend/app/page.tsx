@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import { useColors } from "@/lib/theme";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { TripToolbar } from "@/components/TripToolbar";
@@ -17,8 +17,6 @@ import { useTrips } from "@/hooks/useTrips";
 import { useCurrentTrip } from "@/hooks/useCurrentTrip";
 import { useStepEditor } from "@/hooks/useStepEditor";
 import { useTripUI } from "@/hooks/useTripUI";
-import { session, api } from "@/lib/api";
-import { resolveLocation } from "@/lib/geocoding";
 
 export default function Home() {
   return (
@@ -32,68 +30,14 @@ export default function Home() {
 
 function HomeContent() {
   const COLORS = useColors();
-  const { setUser, handleLogout } = useAuth();
+  const { handleLogout } = useAuth();
   const {
-    trips, loading, setTrips, setLoading,
+    trips, loading,
     handleCreateTripFromToolbar, handleSelectTrip, handleDeleteTrip, handleSplitTrip,
   } = useTrips();
-  const {
-    currentTrip, setCurrentTrip, steps, setSteps, handleUpdateTrip,
-  } = useCurrentTrip();
-  const {
-    showStepModal, selectedMapCoords, handleCancelStep, handleAddStep,
-  } = useStepEditor();
-  const {
-    showRecommendations, setShowRecommendations, recommendationLocation, setCenterLocation,
-  } = useTripUI();
-
-  // Load user + trips on mount
-  useEffect(() => {
-    const token = session.getToken();
-    const user = session.getUser();
-    if (!token) return;
-
-    setUser(user);
-
-    const loadTrips = async () => {
-      try {
-        const trips = await api.getTrips(token);
-
-        if (!trips || trips.length === 0) {
-          setTrips([]);
-          setCurrentTrip(null);
-          setSteps([]);
-          return;
-        }
-
-        setTrips(trips);
-        const latestTrip = trips[trips.length - 1];
-
-        try {
-          const tripSteps = await api.getSteps(token, latestTrip.id);
-          setSteps(tripSteps);
-          setCurrentTrip({ ...latestTrip, steps: tripSteps });
-
-          if (tripSteps.length > 0) {
-            const last = tripSteps[tripSteps.length - 1];
-            setCenterLocation({ lat: last.lat, lng: last.lng, zoom: 10 });
-          } else if (latestTrip.title) {
-            const loc = await resolveLocation(latestTrip.title);
-            if (loc) setCenterLocation(loc);
-          }
-        } catch {
-          setSteps([]);
-          setCurrentTrip(latestTrip);
-        }
-      } catch (err) {
-        console.error("[Home] Failed to load trips:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTrips();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const { currentTrip, steps, handleUpdateTrip } = useCurrentTrip();
+  const { showStepModal, selectedMapCoords, handleCancelStep, handleAddStep } = useStepEditor();
+  const { showRecommendations, setShowRecommendations, recommendationLocation } = useTripUI();
 
   if (loading) {
     return (
