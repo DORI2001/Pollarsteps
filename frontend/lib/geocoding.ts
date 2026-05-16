@@ -1,4 +1,4 @@
-import { API_BASE } from "./api/client";
+import { request } from "./api/client";
 
 export interface ResolvedLocation {
   lat: number;
@@ -22,10 +22,11 @@ const fullResultCache = new Map<string, Promise<GeocodingResult | null>>();
 
 const fetchFullResult = async (query: string): Promise<GeocodingResult | null> => {
   try {
-    const res = await fetch(`${API_BASE}/geocoding/geocode?location=${encodeURIComponent(query)}`);
-    if (!res.ok) return null;
-    const geo = await res.json();
-    return geo ?? null;
+    return await request<GeocodingResult | null>({
+      method: "GET",
+      path: "/geocoding/geocode",
+      query: { location: query },
+    });
   } catch {
     return null;
   }
@@ -63,16 +64,12 @@ const reverseCache = new Map<string, Promise<string>>();
 
 const fetchLocationName = async (lat: number, lng: number): Promise<string> => {
   try {
-    const res = await fetch(`${API_BASE}/geocoding/reverse-geocode?lat=${lat}&lon=${lng}`);
-    if (!res.ok) return "";
-    const text = await res.text();
-    // Backend returns a JSON string (quoted) or null
-    try {
-      const parsed = JSON.parse(text);
-      return typeof parsed === "string" ? parsed : "";
-    } catch {
-      return text.replace(/^"|"$/g, "");
-    }
+    const result = await request<string | null>({
+      method: "GET",
+      path: "/geocoding/reverse-geocode",
+      query: { lat: String(lat), lon: String(lng) },
+    });
+    return typeof result === "string" ? result : "";
   } catch {
     return "";
   }
