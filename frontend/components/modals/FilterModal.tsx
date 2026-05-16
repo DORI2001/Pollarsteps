@@ -3,8 +3,7 @@
 import React from "react";
 import { useColors } from "@/lib/theme";
 import { ModalShell } from "./ModalShell";
-import { Trip } from "@/lib/types";
-import { TripFilter } from "@/lib/search";
+import { Trip, TripFilter } from "@/lib/types";
 
 interface FilterModalProps {
   trips: Trip[];

@@ -2,14 +2,11 @@ from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
-import secrets
 from app.api.deps import get_db, get_current_user
 from app.schemas.trip import TripCreate, TripWithSteps, TripRead, TripUpdate, TripSplitRequest, TripSplitResponse
 from app.services import trips as trip_service
-from app.models.trip import Trip
-from app.models.user import User
-from app.models.collaborator import TripCollaborator, CollaboratorRole
-from app.utils.errors import NotFoundError, ForbiddenError, AppException, check_ownership
+from app.models.collaborator import CollaboratorRole
+from app.utils.errors import NotFoundError, AppException
 from pydantic import BaseModel as PydanticBaseModel
 
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -77,52 +74,26 @@ async def split_trip(
 
 @router.post("/{trip_id}/share")
 async def generate_share_link(trip_id: UUID, session: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
-    """Generate a shareable link for a trip."""
-    result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
-    trip = result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != str(current_user.id):
-        raise ForbiddenError()
-
-    # Generate token if not already set
-    if not trip.share_token:
-        trip.share_token = secrets.token_urlsafe(32)
-        trip.is_public = True
-        await session.commit()
-        await session.refresh(trip)
-
-    return {"share_token": trip.share_token, "share_url": f"/shared/{trip.share_token}"}
+    return await trip_service.generate_share_link(str(trip_id), str(current_user.id), session)
 
 
 @router.delete("/{trip_id}/share")
 async def revoke_share_link(trip_id: UUID, session: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
-    """Revoke a share link for a trip."""
-    result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
-    trip = result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != str(current_user.id):
-        raise ForbiddenError()
-
-    trip.share_token = None
-    trip.is_public = False
-    await session.commit()
+    await trip_service.revoke_share_link(str(trip_id), str(current_user.id), session)
     return {"message": "Share link revoked"}
 
 
 @router.get("/shared/{share_token}", response_model=TripWithSteps)
 async def get_shared_trip(share_token: str, session: AsyncSession = Depends(get_db)):
-    """View a shared trip (no auth required)."""
+    from sqlalchemy import select as sa_select
+    from app.models.trip import Trip
     result = await session.execute(
-        select(Trip).where(Trip.share_token == share_token, Trip.is_public == True)
+        sa_select(Trip).where(Trip.share_token == share_token, Trip.is_public == True)
     )
     trip = result.scalar_one_or_none()
     if not trip:
         raise NotFoundError("Shared trip")
-
-    from app.services.trips import get_trip_with_steps
-    trip_data = await get_trip_with_steps(trip.id, session)
+    trip_data = await trip_service.get_trip_with_steps(trip.id, session)
     if not trip_data:
         raise NotFoundError("Trip")
     return trip_data
@@ -152,41 +123,8 @@ async def invite_collaborator(
     session: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Invite a user to collaborate on a trip."""
-    trip_result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
-    trip = trip_result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != str(current_user.id):
-        raise ForbiddenError("Only the trip owner can invite collaborators")
-
-    user_result = await session.execute(select(User).where(User.username == payload.username))
-    invited_user = user_result.scalar_one_or_none()
-    if not invited_user:
-        raise NotFoundError(f"User '{payload.username}'")
-    if invited_user.id == str(current_user.id):
-        raise AppException(detail="Cannot invite yourself")
-
-    existing = await session.execute(
-        select(TripCollaborator).where(
-            TripCollaborator.trip_id == str(trip_id),
-            TripCollaborator.user_id == invited_user.id,
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise AppException(detail="User is already a collaborator", status_code=409)
-
-    collab = TripCollaborator(trip_id=str(trip_id), user_id=invited_user.id, role=payload.role)
-    session.add(collab)
-    await session.commit()
-    await session.refresh(collab)
-
-    return CollaboratorOut(
-        id=collab.id,
-        user_id=invited_user.id,
-        username=invited_user.username,
-        role=collab.role,
-    )
+    rec = await trip_service.invite_collaborator(str(trip_id), str(current_user.id), payload.username, payload.role, session)
+    return CollaboratorOut(id=rec.id, user_id=rec.user_id, username=rec.username, role=rec.role)
 
 
 @router.get("/{trip_id}/collaborators", response_model=list[CollaboratorOut])
@@ -195,21 +133,8 @@ async def list_collaborators(
     session: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """List collaborators on a trip."""
-    trip_result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
-    trip = trip_result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != str(current_user.id):
-        raise ForbiddenError()
-
-    result = await session.execute(
-        select(TripCollaborator, User)
-        .join(User, TripCollaborator.user_id == User.id)
-        .where(TripCollaborator.trip_id == str(trip_id))
-    )
-    rows = result.all()
-    return [CollaboratorOut(id=c.id, user_id=c.user_id, username=u.username, role=c.role) for c, u in rows]
+    recs = await trip_service.list_collaborators(str(trip_id), str(current_user.id), session)
+    return [CollaboratorOut(id=r.id, user_id=r.user_id, username=r.username, role=r.role) for r in recs]
 
 
 @router.delete("/{trip_id}/collaborators/{user_id}", status_code=204)
@@ -219,22 +144,5 @@ async def remove_collaborator(
     session: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Remove a collaborator from a trip."""
-    trip_result = await session.execute(select(Trip).where(Trip.id == str(trip_id)))
-    trip = trip_result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != str(current_user.id):
-        raise ForbiddenError("Only the trip owner can remove collaborators")
-
-    result = await session.execute(
-        select(TripCollaborator).where(
-            TripCollaborator.trip_id == str(trip_id),
-            TripCollaborator.user_id == str(user_id),
-        )
-    )
-    collab = result.scalar_one_or_none()
-    if not collab:
-        raise NotFoundError("Collaborator")
-    await session.delete(collab)
+    await trip_service.remove_collaborator(str(trip_id), str(current_user.id), str(user_id), session)
     await session.commit()

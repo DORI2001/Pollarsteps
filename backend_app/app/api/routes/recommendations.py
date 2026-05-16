@@ -77,7 +77,7 @@ async def get_step_recommendations(
         return None
     
     return await get_recommendations_for_step(
-        step.name,
+        step.location_name or "",
         step.lat,
         step.lng
     )

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { filterTrips, TripFilter } from "@/lib/search";
+import React, { useState } from "react";
+import { useSearch } from "@/hooks/useSearch";
 import { useColors } from "@/lib/theme";
 import { api, session as authSession } from "@/lib/api";
 import { Trip } from "@/lib/types";
@@ -32,17 +32,11 @@ export function TripToolbar({
 }: TripToolbarProps) {
   const COLORS = useColors();
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
-  const [searchText, setSearchText] = useState("");
-  const [filterSettings, setFilterSettings] = useState<TripFilter>({ searchText: "", sortBy: "date", sortOrder: "desc" });
   const [shareLink, setShareLink] = useState("");
   const [shareLoading, setShareLoading] = useState(false);
+  const { filteredTrips, searchText, setSearchText, filterSettings, setFilterSettings } = useSearch(trips);
 
   const close = () => setActiveModal(null);
-
-  const filteredTrips = useMemo(
-    () => filterTrips(trips, { ...filterSettings, searchText }),
-    [trips, filterSettings, searchText]
-  );
 
   const handleShare = async () => {
     if (!currentTrip) return;

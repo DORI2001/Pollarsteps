@@ -1,4 +1,8 @@
+import { Trip, Step } from "@/lib/types";
+
 // Export utilities for trip data in multiple formats
+
+export type ExportFormat = "json" | "csv" | "geojson" | "gpx";
 
 export interface ExportTrip {
   id: string;
@@ -189,6 +193,31 @@ function downloadFile(
   link.click();
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
+}
+
+export function exportTrip(trip: Trip, format: ExportFormat): void {
+  const data: ExportTrip = {
+    id: trip.id,
+    title: trip.title,
+    description: trip.description,
+    start_date: trip.start_date,
+    steps: (trip.steps || []).map((step: Step, index: number) => ({
+      id: step.id,
+      lat: step.lat,
+      lng: step.lng,
+      timestamp: step.timestamp,
+      location_name: step.location_name,
+      note: step.note,
+      duration_days: step.duration_days,
+      index: index + 1,
+    })),
+    total_distance: trip.total_distance || 0,
+    total_days: trip.total_days_travelled || 0,
+  };
+  const fns: Record<ExportFormat, (t: ExportTrip) => void> = {
+    json: exportAsJSON, csv: exportAsCSV, geojson: exportAsGeoJSON, gpx: exportAsGPX,
+  };
+  fns[format](data);
 }
 
 // Utility: Escape XML special characters

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { searchLocation, GeocodingResult } from "@/lib/geocoding";
 
 interface LocationSearchProps {
   onLocationSelected: (location: {
@@ -9,72 +10,29 @@ interface LocationSearchProps {
   token: string;
 }
 
-interface SearchResult {
-  name: string;
-  latitude: number;
-  longitude: number;
-  address: string;
-  country: string;
-  display_name: string;
-}
-
 const LocationSearch: React.FC<LocationSearchProps> = ({
   onLocationSelected,
-  token,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<GeocodingResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Debounced search function
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-
-    // Clear previous timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    if (!query.trim()) {
-      setResults([]);
-      setShowResults(false);
-      return;
-    }
-
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!query.trim()) { setResults([]); setShowResults(false); return; }
     setLoading(true);
-
-    // Debounce the search
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const params = new URLSearchParams({
-          location: query,
-        });
-
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/geocoding/geocode?${params}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (response.status === 404 || response.status === 204) {
+        const geo = await searchLocation(query);
+        if (geo) {
+          setResults([geo]);
+          setShowResults(true);
+        } else {
           setResults([]);
           setShowResults(true);
-        } else if (!response.ok) {
-          console.error("Search failed:", response.status);
-          setResults([]);
-        } else {
-          const data = await response.json();
-          if (data) {
-            setResults([data]); // Single result from geocoding
-            setShowResults(true);
-          } else {
-            setResults([]);
-          }
         }
       } catch (err) {
         console.error("Search error:", err);
@@ -82,10 +40,10 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       } finally {
         setLoading(false);
       }
-    }, 300); // 300ms debounce
+    }, 300);
   };
 
-  const handleSelectResult = (result: SearchResult) => {
+  const handleSelectResult = (result: GeocodingResult) => {
     onLocationSelected({
       name: result.display_name,
       lat: result.latitude,

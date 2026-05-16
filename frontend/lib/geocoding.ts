@@ -1,8 +1,3 @@
-/**
- * Location resolver. Wraps the backend /geocoding/geocode endpoint with
- * an in-memory cache and a single error path: failures resolve to null
- * rather than throwing.
- */
 import { API_BASE } from "./api/client";
 
 export interface ResolvedLocation {
@@ -11,63 +6,85 @@ export interface ResolvedLocation {
   zoom?: number;
 }
 
-const cache = new Map<string, Promise<ResolvedLocation | null>>();
+export interface GeocodingResult {
+  name: string;
+  latitude: number;
+  longitude: number;
+  address: string;
+  country: string;
+  display_name: string;
+}
 
-const fetchLocation = async (query: string): Promise<ResolvedLocation | null> => {
+// ─── Forward geocoding ────────────────────────────────────────────────────────
+
+const forwardCache = new Map<string, Promise<ResolvedLocation | null>>();
+const fullResultCache = new Map<string, Promise<GeocodingResult | null>>();
+
+const fetchFullResult = async (query: string): Promise<GeocodingResult | null> => {
   try {
-    const res = await fetch(
-      `${API_BASE}/geocoding/geocode?location=${encodeURIComponent(query)}`
-    );
+    const res = await fetch(`${API_BASE}/geocoding/geocode?location=${encodeURIComponent(query)}`);
     if (!res.ok) return null;
     const geo = await res.json();
-    if (geo?.latitude && geo?.longitude) {
-      return { lat: geo.latitude, lng: geo.longitude, zoom: 6 };
-    }
-    return null;
+    return geo ?? null;
   } catch {
     return null;
   }
 };
 
+/** Resolves a location query to lat/lng/zoom (cached). Returns null on failure. */
 export const resolveLocation = (query: string): Promise<ResolvedLocation | null> => {
   const key = query.trim().toLowerCase();
   if (!key) return Promise.resolve(null);
-  const existing = cache.get(key);
+  const existing = forwardCache.get(key);
   if (existing) return existing;
-  const pending = fetchLocation(key);
-  cache.set(key, pending);
-  // Evict failures so a retry can succeed.
-  pending.then((r) => { if (!r) cache.delete(key); }).catch(() => cache.delete(key));
+  const pending = fetchFullResult(key).then((geo) =>
+    geo?.latitude && geo?.longitude ? { lat: geo.latitude, lng: geo.longitude, zoom: 6 } : null
+  );
+  forwardCache.set(key, pending);
+  pending.then((r) => { if (!r) forwardCache.delete(key); }).catch(() => forwardCache.delete(key));
   return pending;
 };
 
-// Reverse geocoding cache (keyed by "lat,lng")
+/** Resolves a location query to the full backend GeocodingResult (cached). */
+export const searchLocation = (query: string): Promise<GeocodingResult | null> => {
+  const key = query.trim().toLowerCase();
+  if (!key) return Promise.resolve(null);
+  const existing = fullResultCache.get(key);
+  if (existing) return existing;
+  const pending = fetchFullResult(key);
+  fullResultCache.set(key, pending);
+  pending.then((r) => { if (!r) fullResultCache.delete(key); }).catch(() => fullResultCache.delete(key));
+  return pending;
+};
+
+// ─── Reverse geocoding ────────────────────────────────────────────────────────
+
 const reverseCache = new Map<string, Promise<string>>();
 
 const fetchLocationName = async (lat: number, lng: number): Promise<string> => {
   try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`,
-      { headers: { "Accept-Language": "en" } }
-    );
-    const data = await res.json();
-    if (data.address) {
-      const { city, town, village, county, state, country } = data.address;
-      return `${city || town || village || county || "Location"}, ${state || country || ""}`.replace(/,\s*$/, "");
+    const res = await fetch(`${API_BASE}/geocoding/reverse-geocode?lat=${lat}&lon=${lng}`);
+    if (!res.ok) return "";
+    const text = await res.text();
+    // Backend returns a JSON string (quoted) or null
+    try {
+      const parsed = JSON.parse(text);
+      return typeof parsed === "string" ? parsed : "";
+    } catch {
+      return text.replace(/^"|"$/g, "");
     }
-    return "";
   } catch {
     return "";
   }
 };
 
+/** Reverse-geocodes lat/lng to a human-readable location name (cached). Returns "" on failure. */
 export const resolveLocationName = (lat: number, lng: number): Promise<string> => {
   const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
   const existing = reverseCache.get(key);
   if (existing) return existing;
   const pending = fetchLocationName(lat, lng);
   reverseCache.set(key, pending);
-  // Evict empty results so retries can succeed.
   pending.then((r) => { if (!r) reverseCache.delete(key); }).catch(() => reverseCache.delete(key));
   return pending;
 };

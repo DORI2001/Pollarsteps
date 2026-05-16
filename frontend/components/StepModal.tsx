@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useColors } from "@/lib/theme";
+import { resolveLocationName } from "@/lib/geocoding";
 import { ModalShell } from "@/components/modals/ModalShell";
 
 interface StepModalProps {
@@ -72,20 +73,8 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
   useEffect(() => {
     let cancelled = false;
     setGeocoding(true);
-    fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}&accept-language=en`,
-      { headers: { "Accept-Language": "en" } }
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        if (data.address) {
-          const { city, town, village, county, state, country } = data.address;
-          const name = `${city || town || village || county || "Location"}, ${state || country || ""}`.replace(/,\s*$/, "");
-          setLocationName(name);
-        }
-      })
-      .catch(() => {/* silently ignore */})
+    resolveLocationName(coords.lat, coords.lng)
+      .then((name) => { if (!cancelled && name) setLocationName(name); })
       .finally(() => { if (!cancelled) setGeocoding(false); });
     return () => { cancelled = true; };
   }, [coords.lat, coords.lng]);

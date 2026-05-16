@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useReelPlayback } from "@/hooks/useReelPlayback";
 import { useColors } from "@/lib/theme";
+import { ModalShell } from "@/components/modals/ModalShell";
 import { api, session as authSession } from "@/lib/api";
 import { Trip } from "@/lib/types";
 
@@ -176,16 +177,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
   // ─── CONFIGURE STEP ────────────────────────────────────────────────────────
   if (modalStep === "configure") {
     return (
-      <div
-        style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.65)",
-          backdropFilter: "blur(8px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 2000,
-        }}
-        onClick={onClose}
-      >
+      <ModalShell onClose={onClose} fullscreen backdropBg="rgba(0,0,0,0.65)" zIndex={2000}>
         <div
           style={{
             background: COLORS.surface,
@@ -198,7 +190,6 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
             flexDirection: "column",
             boxShadow: "0 32px 64px rgba(0,0,0,0.25)",
           }}
-          onClick={e => e.stopPropagation()}
         >
           {/* Header */}
           <div style={{
@@ -434,23 +425,14 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
             </button>
           </div>
         </div>
-      </div>
+      </ModalShell>
     );
   }
 
   // ─── PREVIEW STEP ──────────────────────────────────────────────────────────
   if (modalStep === "preview") {
     return (
-      <div
-        style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.65)",
-          backdropFilter: "blur(8px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 2000,
-        }}
-        onClick={onClose}
-      >
+      <ModalShell onClose={onClose} fullscreen backdropBg="rgba(0,0,0,0.65)" zIndex={2000}>
         <div
           style={{
             background: COLORS.surface,
@@ -460,7 +442,6 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
             boxShadow: "0 32px 64px rgba(0,0,0,0.25)",
             overflow: "hidden",
           }}
-          onClick={e => e.stopPropagation()}
         >
           {/* Success header */}
           <div style={{
@@ -558,7 +539,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
             </button>
           </div>
         </div>
-      </div>
+      </ModalShell>
     );
   }
 
