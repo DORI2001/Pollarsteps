@@ -2,13 +2,12 @@
 
 # 🗺️ Pollarsteps
 
-**Track your travels on an interactive map |**
-Add locations as you go, attach photos, get AI-powered recommendations, and share your trips with friends
+**Track your travels on an interactive map —**
+add locations as you go, attach photos and memories, get AI-powered recommendations, and share your trips with the world
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org)
-
 
 </div>
 
@@ -30,13 +29,18 @@ Add locations as you go, attach photos, get AI-powered recommendations, and shar
 
 | | |
 |---|---|
-| 🗺️ **Interactive Map** | Click anywhere to add a location and visualize your route |
-| ✈️ **Trip Management** | Create, edit, and share trips — map flies to the right location automatically |
-| 📍 **Location Steps** | Add notes and photos at each stop — location auto-detected via reverse geocoding |
-| 🤖 **AI Recommendations** | Suggestions for restaurants, activities, and attractions |
-| 📖 **Stories & Reels** | Turn trips into shareable slideshows with music |
-| 📊 **Analytics** | Distance traveled, days per destination, trip stats (collapsible detail view) |
-| 🔒 **Security** | JWT auth, rate limiting on auth endpoints, security headers |
+| 🗺️ **Interactive Map** | Click anywhere on the Leaflet map to drop a step; route line updates in real time |
+| ✈️ **Trip Management** | Create, edit, split, and delete trips; map auto-centers on your latest location |
+| 📍 **Location Steps** | Notes, photos, and duration per stop; location name auto-resolved via reverse geocoding |
+| 🤖 **AI Recommendations** | Gemini-powered suggestions for restaurants, activities, and attractions near any step |
+| 📖 **AI Chronicle** | Generate a narrative journal entry for your trip using Gemini |
+| 🎬 **Story Reels** | Slideshow reel with YouTube soundtrack, configurable duration, and a shareable link |
+| 📷 **Photo Gallery** | Full-trip photo grid in a single modal |
+| 📊 **Trip Stats** | Distance traveled, days per destination, average pace — collapsible detail panel |
+| 🔗 **Sharing** | Generate a public share link for any trip; revoke at any time |
+| 👥 **Collaboration** | Invite other users as viewers or editors |
+| 🌙 **Dark / Light theme** | System-aware with manual toggle |
+| 🔒 **Auth** | JWT access + refresh tokens, rate-limited endpoints, secure headers |
 
 ---
 
@@ -68,11 +72,11 @@ cp frontend/.env.example frontend/.env.local
 
 | File | Variable | Notes |
 |------|----------|-------|
-| `backend_app/.env` | `JWT_SECRET_KEY` | Generate: `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
-| `backend_app/.env` | `DATABASE_URL` | SQLite (default) or `postgresql+asyncpg://...` for production |
-| `backend_app/.env` | `GEMINI_API_KEY` | AI recommendations (optional) |
+| `backend_app/.env` | `JWT_SECRET_KEY` | `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `backend_app/.env` | `DATABASE_URL` | SQLite default; `postgresql+asyncpg://...` for production |
+| `backend_app/.env` | `GEMINI_API_KEY` | Required for AI recommendations and chronicle |
 | `frontend/.env.local` | `NEXT_PUBLIC_API_BASE` | Backend URL, e.g. `http://localhost:8000/api` |
-| `frontend/.env.local` | `NEXT_PUBLIC_MAPBOX_TOKEN` | Satellite map tiles (optional) |
+| `frontend/.env.local` | `NEXT_PUBLIC_MAPBOX_TOKEN` | Satellite map tiles (optional — falls back to OpenStreetMap) |
 
 ### 3 — Run
 
@@ -85,7 +89,7 @@ PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 cd frontend && npm run dev
 ```
 
-> 🌐 App: **http://localhost:3000** · API Docs: **http://127.0.0.1:8000/docs**
+> 🌐 App: **http://localhost:3000** · API docs: **http://127.0.0.1:8000/docs**
 
 ---
 
@@ -93,10 +97,11 @@ cd frontend && npm run dev
 
 | Layer | Technologies |
 |-------|-------------|
-| **Backend** | FastAPI · SQLite · SQLAlchemy (async) · Pydantic v2 · JWT |
-| **Frontend** | Next.js 14 · TypeScript · Tailwind CSS · Leaflet |
-| **AI** | Gemini API — recommendations & journal entries |
-| **DevOps** | Docker · Docker Compose |
+| **Backend** | FastAPI · SQLite / PostgreSQL · SQLAlchemy (async) · Pydantic v2 · JWT |
+| **Frontend** | Next.js 14 · TypeScript · Leaflet · inline theme system (light/dark) |
+| **AI** | Google Gemini — recommendations, AI chronicle |
+| **Geocoding** | Nominatim (reverse) · OpenStreetMap forward search via backend proxy |
+| **Infra** | Docker · Docker Compose |
 
 ---
 
@@ -104,22 +109,24 @@ cd frontend && npm run dev
 
 ```
 Pollarsteps/
-├── backend_app/          # FastAPI backend
+├── backend_app/
 │   └── app/
-│       ├── api/          # Route handlers
-│       ├── models/       # SQLAlchemy ORM models
-│       ├── schemas/      # Pydantic validation
-│       ├── services/     # Business logic
-│       └── core/         # DB, auth, config
-├── frontend/             # Next.js 14 frontend
-│   ├── app/              # Pages
-│   ├── components/       # React components
-│   └── lib/              # API client & utilities
-├── services/
-│   └── travel_intelligence/  # Analytics microservice
-├── tests/                # Integration tests
-├── docs/                 # Architecture & API reference
-└── scripts/              # Dev helper scripts
+│       ├── api/
+│       │   ├── routes/       # Thin route handlers (deserialize → service → serialize)
+│       │   └── deps.py       # FastAPI dependencies (auth, DB session)
+│       ├── models/           # SQLAlchemy ORM models
+│       ├── schemas/          # Pydantic request/response schemas
+│       ├── services/         # Business logic (trips, steps, AI, geocoding)
+│       └── core/             # DB init, auth, config
+├── frontend/
+│   ├── app/                  # Next.js pages (signin, signup, shared trip viewer)
+│   ├── components/           # React components & modals
+│   ├── hooks/                # Domain hooks (useTrips, useCurrentTrip, useSearch, …)
+│   ├── lib/                  # API client, geocoding, export, search, theme
+│   └── providers/            # TripProvider — 5 focused React contexts
+├── docs/                     # Architecture & API reference
+├── scripts/                  # Dev helper scripts
+└── tests/                    # Integration tests
 ```
 
 ---
@@ -144,5 +151,5 @@ bash scripts/clean.sh    # Clean build artifacts
 ---
 
 <div align="center">
-· Built with ❤️ by <a href="https://github.com/DORI2001">Dori</a>
+Built with ❤️ by <a href="https://github.com/DORI2001">Dori</a>
 </div>
