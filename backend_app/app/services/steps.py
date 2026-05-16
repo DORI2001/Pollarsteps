@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from uuid import UUID
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -116,7 +117,7 @@ async def update_step(step_id: UUID, payload: StepUpdate, session: AsyncSession,
     )
 
 
-async def add_step_image(step_id: UUID, image_url: str, caption: str | None, owner_id: str, session: AsyncSession) -> StepImageRead:
+async def add_step_image(step_id: UUID, image_url: str, caption: Optional[str], owner_id: str, session: AsyncSession) -> StepImageRead:
     step = await session.get(Step, str(step_id))
     if not step:
         raise HTTPException(status_code=404, detail="Step not found")
