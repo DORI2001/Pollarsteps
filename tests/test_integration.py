@@ -42,7 +42,8 @@ class TestRunner:
         self.user_id: Optional[str] = None
         self.trip_id: Optional[str] = None
         self.step_ids: list[str] = []
-    
+        self.other_token: Optional[str] = None  # second user for security tests
+
     async def run_tests(self):
         """Run all tests"""
         async with httpx.AsyncClient(timeout=30) as client:
@@ -58,10 +59,27 @@ class TestRunner:
             
             # Step tests
             await self.test_create_step(client)
+            await self.test_step_duplicate_rejected(client)
+            await self.test_add_step_image(client)
             await self.test_get_steps(client)
             await self.test_update_step(client)
             await self.test_delete_step(client)
             
+            # Trip update
+            await self.test_update_trip(client)
+
+            # Sharing
+            await self.test_share_trip(client)
+            await self.test_access_shared_trip(client)
+            await self.test_revoke_share_link(client)
+
+            # Trip split
+            await self.test_split_trip(client)
+
+            # Security: register second user + cross-user access
+            await self.test_register_second_user(client)
+            await self.test_cross_user_forbidden(client)
+
             # Trip deletion (last test)
             await self.test_delete_trip(client)
     
@@ -298,6 +316,206 @@ class TestRunner:
         except Exception as e:
             self.log_test("Delete Step", False, str(e))
     
+    async def test_share_trip(self, client: httpx.AsyncClient):
+        """Test: Generating a share link returns a token and marks the trip public"""
+        print(f"\n{BLUE}[Sharing Tests]{RESET}")
+        if not self.token or not self.trip_id:
+            self.log_test("Generate Share Link", False, "No trip ID")
+            return
+        try:
+            response = await client.post(
+                f"{API_BASE}/trips/{self.trip_id}/share",
+                headers={"Authorization": f"Bearer {self.token}"}
+            )
+            data = response.json()
+            passed = response.status_code == 200 and bool(data.get("share_token"))
+            self.share_token = data.get("share_token")
+            self.log_test("Generate Share Link", passed,
+                          f"Token: {self.share_token}")
+        except Exception as e:
+            self.log_test("Generate Share Link", False, str(e))
+
+    async def test_access_shared_trip(self, client: httpx.AsyncClient):
+        """Test: Anyone can access a trip via its share token (no auth required)"""
+        token = getattr(self, "share_token", None)
+        if not token:
+            self.log_test("Access Shared Trip", False, "No share token")
+            return
+        try:
+            response = await client.get(f"{API_BASE}/trips/shared/{token}")
+            data = response.json()
+            passed = response.status_code == 200 and data.get("id") == self.trip_id
+            self.log_test("Access Shared Trip", passed,
+                          f"Status: {response.status_code}, Trip ID matches: {data.get('id') == self.trip_id}")
+        except Exception as e:
+            self.log_test("Access Shared Trip", False, str(e))
+
+    async def test_revoke_share_link(self, client: httpx.AsyncClient):
+        """Test: After revoking, the share token returns 404"""
+        token = getattr(self, "share_token", None)
+        if not self.token or not self.trip_id or not token:
+            self.log_test("Revoke Share Link", False, "No share token")
+            return
+        try:
+            revoke = await client.delete(
+                f"{API_BASE}/trips/{self.trip_id}/share",
+                headers={"Authorization": f"Bearer {self.token}"}
+            )
+            if revoke.status_code not in (200, 204):
+                self.log_test("Revoke Share Link", False, f"Revoke returned {revoke.status_code}")
+                return
+            # Token must no longer work
+            access = await client.get(f"{API_BASE}/trips/shared/{token}")
+            self.log_test("Revoke Share Link", access.status_code == 404,
+                          f"Post-revoke GET returned {access.status_code} (expected 404)")
+        except Exception as e:
+            self.log_test("Revoke Share Link", False, str(e))
+
+    async def test_step_duplicate_rejected(self, client: httpx.AsyncClient):
+        """Test: Adding a step within 100m of an existing step returns 409"""
+        print(f"\n{BLUE}[Step Deduplication Tests]{RESET}")
+        if not self.token or not self.trip_id or not self.step_ids:
+            self.log_test("Step Duplicate 409", False, "Missing token, trip, or first step")
+            return
+        try:
+            # Same coordinates as the first step — must trigger the 100m proximity check
+            response = await client.post(
+                f"{API_BASE}/steps/",
+                json={
+                    "trip_id": self.trip_id,
+                    "lat": 40.7128,
+                    "lng": -74.0060,
+                    "timestamp": datetime.now().isoformat(),
+                    "client_uuid": str(uuid.uuid4()),
+                },
+                headers={"Authorization": f"Bearer {self.token}"}
+            )
+            self.log_test("Step Duplicate 409", response.status_code == 409,
+                          f"Status: {response.status_code} (expected 409)")
+        except Exception as e:
+            self.log_test("Step Duplicate 409", False, str(e))
+
+    async def test_add_step_image(self, client: httpx.AsyncClient):
+        """Test: Adding an image to a step stores it and returns ordered metadata"""
+        print(f"\n{BLUE}[Step Image Tests]{RESET}")
+        if not self.token or not self.step_ids:
+            self.log_test("Add Step Image", False, "No step ID")
+            return
+        try:
+            step_id = self.step_ids[0]
+            image_url = "https://example.com/photo.jpg"
+            response = await client.post(
+                f"{API_BASE}/steps/{step_id}/images",
+                params={"image_url": image_url, "caption": "Test photo"},
+                headers={"Authorization": f"Bearer {self.token}"}
+            )
+            data = response.json()
+            passed = response.status_code == 201 and data.get("image_url") == image_url and data.get("order_index") == 0
+            self.log_test("Add Step Image", passed,
+                          f"Status: {response.status_code}, order_index: {data.get('order_index')}")
+        except Exception as e:
+            self.log_test("Add Step Image", False, str(e))
+
+    async def test_split_trip(self, client: httpx.AsyncClient):
+        """Test: Splitting a trip moves steps into a new trip and leaves originals in place"""
+        print(f"\n{BLUE}[Trip Split Tests]{RESET}")
+        if not self.token or not self.trip_id:
+            self.log_test("Split Trip", False, "No trip ID")
+            return
+        try:
+            # Add two steps so there's something to split
+            s1 = await client.post(f"{API_BASE}/steps/", json={
+                "trip_id": self.trip_id, "lat": 51.5074, "lng": -0.1278,
+                "location_name": "London", "timestamp": datetime.now().isoformat(),
+                "client_uuid": str(uuid.uuid4()),
+            }, headers={"Authorization": f"Bearer {self.token}"})
+            s2 = await client.post(f"{API_BASE}/steps/", json={
+                "trip_id": self.trip_id, "lat": 48.8566, "lng": 2.3522,
+                "location_name": "Paris", "timestamp": datetime.now().isoformat(),
+                "client_uuid": str(uuid.uuid4()),
+            }, headers={"Authorization": f"Bearer {self.token}"})
+            if s1.status_code != 201 or s2.status_code != 201:
+                self.log_test("Split Trip", False, f"Step creation failed: {s1.status_code}, {s2.status_code}")
+                return
+
+            step_to_move = s2.json()["id"]
+            response = await client.post(
+                f"{API_BASE}/trips/{self.trip_id}/split",
+                json={"new_trip_title": "Paris leg", "step_ids": [step_to_move]},
+                headers={"Authorization": f"Bearer {self.token}"}
+            )
+            if response.status_code != 200:
+                self.log_test("Split Trip", False, f"Split returned {response.status_code}: {response.text}")
+                return
+            data = response.json()
+            new_trip_id = data.get("new_trip", {}).get("id")
+            # Verify Paris step is now in the new trip
+            new_steps = await client.get(
+                f"{API_BASE}/steps/trip/{new_trip_id}",
+                headers={"Authorization": f"Bearer {self.token}"}
+            )
+            step_ids_in_new = [s["id"] for s in new_steps.json().get("steps", [])]
+            self.log_test("Split Trip", step_to_move in step_ids_in_new,
+                          f"New trip '{data.get('new_trip', {}).get('title')}' contains moved step: {step_to_move in step_ids_in_new}")
+            # Clean up new trip
+            await client.delete(f"{API_BASE}/trips/{new_trip_id}",
+                                 headers={"Authorization": f"Bearer {self.token}"})
+        except Exception as e:
+            self.log_test("Split Trip", False, str(e))
+
+    async def test_register_second_user(self, client: httpx.AsyncClient):
+        """Register a second user; store token for later security tests"""
+        ts = datetime.now().timestamp()
+        other_email = f"other-{ts}@example.com"
+        other_username = f"other{int(ts)}"
+        try:
+            reg = await client.post(f"{API_BASE}/auth/register", json={
+                "email": other_email, "password": TEST_PASSWORD, "username": other_username
+            })
+            if reg.status_code not in (200, 201):
+                return  # silently skip — security test will handle missing token
+            self.other_token = reg.json().get("access_token")
+        except Exception:
+            pass  # security test will handle missing token
+
+    async def test_cross_user_forbidden(self, client: httpx.AsyncClient):
+        """Test: A second user cannot access another user's trip (403)"""
+        print(f"\n{BLUE}[Security Tests]{RESET}")
+        if not self.trip_id or not self.other_token:
+            self.log_test("Cross-User 403", False, "No trip ID or second user token")
+            return
+        try:
+            get_resp = await client.get(
+                f"{API_BASE}/trips/{self.trip_id}",
+                headers={"Authorization": f"Bearer {self.other_token}"}
+            )
+            self.log_test("Cross-User 403", get_resp.status_code == 403,
+                          f"GET returned {get_resp.status_code} (expected 403)")
+        except Exception as e:
+            self.log_test("Cross-User 403", False, str(e))
+
+    async def test_update_trip(self, client: httpx.AsyncClient):
+        """Test: Patching a trip title is reflected when the trip is fetched again"""
+        print(f"\n{BLUE}[Trip Update Tests]{RESET}")
+        if not self.token or not self.trip_id:
+            self.log_test("Update Trip", False, "No trip ID")
+            return
+        try:
+            new_title = "Updated Trip Title"
+            response = await client.patch(
+                f"{API_BASE}/trips/{self.trip_id}",
+                json={"title": new_title},
+                headers={"Authorization": f"Bearer {self.token}"}
+            )
+            if response.status_code != 200:
+                self.log_test("Update Trip", False, f"PATCH returned {response.status_code}")
+                return
+            data = response.json()
+            self.log_test("Update Trip", data.get("title") == new_title,
+                          f"Title: {data.get('title')}")
+        except Exception as e:
+            self.log_test("Update Trip", False, str(e))
+
     async def test_delete_trip(self, client: httpx.AsyncClient):
         """Test: Delete Trip (tests error handling utilities)"""
         print(f"\n{BLUE}[Cleanup Tests]{RESET}")

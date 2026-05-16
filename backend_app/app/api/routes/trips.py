@@ -6,7 +6,7 @@ from app.api.deps import get_db, get_current_user
 from app.schemas.trip import TripCreate, TripWithSteps, TripRead, TripUpdate, TripSplitRequest, TripSplitResponse
 from app.services import trips as trip_service
 from app.models.collaborator import CollaboratorRole
-from app.utils.errors import NotFoundError, AppException
+from app.utils.errors import NotFoundError, AppException, check_ownership
 from pydantic import BaseModel as PydanticBaseModel
 
 router = APIRouter(prefix="/trips", tags=["trips"])
