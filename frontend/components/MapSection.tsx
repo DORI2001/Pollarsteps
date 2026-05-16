@@ -11,7 +11,7 @@ import { useTripUI } from "@/hooks/useTripUI";
 
 export function MapSection() {
   const COLORS = useColors();
-  const { currentTrip, steps, handleStepsChange } = useCurrentTrip();
+  const { currentTrip, steps } = useCurrentTrip();
   const { loading } = useTrips();
   const { handleMapClick } = useStepEditor();
   const { mapFitCounter, centerLocation } = useTripUI();
@@ -32,7 +32,6 @@ export function MapSection() {
         onMapClick={handleMapClick}
         tripId={currentTrip?.id}
         token={session.getToken() ?? undefined}
-        onStepsChange={handleStepsChange}
         fitTrigger={mapFitCounter}
         centerLocation={centerLocation}
       />

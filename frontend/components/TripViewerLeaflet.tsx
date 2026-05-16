@@ -6,7 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { EditStepModal } from "./EditStepModal";
 import LocationSearch from "./LocationSearch";
 import { RecommendationPanel } from "./RecommendationPanel";
-import { api } from "@/lib/api";
+import { useCurrentTripContext } from "@/providers/TripProvider";
 import { resolveLocationName } from "@/lib/geocoding";
 import { buildStepPopup } from "@/lib/stepPopup";
 
@@ -24,7 +24,6 @@ type Step = {
 type TripViewerLeafletProps = {
   steps: Step[];
   onMapClick: (coords: { lat: number; lng: number }) => void;
-  onStepsChange?: (updatedSteps: Step[]) => void;
   tripId: string;
   token: string;
   fitTrigger?: number;
@@ -32,7 +31,8 @@ type TripViewerLeafletProps = {
 };
 
 
-function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, token, fitTrigger, centerLocation }: TripViewerLeafletProps) {
+function TripViewerLeafletComponent({ steps, onMapClick, tripId, token, fitTrigger, centerLocation }: TripViewerLeafletProps) {
+  const { handleEditStep, handleDeleteStep } = useCurrentTripContext();
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<(L.Marker | L.Polyline)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,22 +52,11 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
   const onMapClickRef = useRef(onMapClick);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
 
-  // Handle edit step
-  const handleEditStep = async (updates: any) => {
+  const handleEditSubmit = async (updates: any) => {
     if (!selectedStep) return;
-    if (!token) {
-      alert("Please sign in again to edit a location.");
-      return;
-    }
     setEditLoading(true);
     try {
-      await api.updateStep(token, selectedStep.id, updates);
-      
-      // Update local state
-      const updatedSteps = steps.map(s => 
-        s.id === selectedStep.id ? { ...s, ...updates } : s
-      );
-      onStepsChange?.(updatedSteps);
+      await handleEditStep(selectedStep.id, updates);
       setShowEditModal(false);
       setSelectedStep(null);
     } catch (err) {
@@ -78,20 +67,10 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
     }
   };
 
-  // Handle delete step
-  const handleDeleteStep = async (stepId: string) => {
-    if (!token) {
-      alert("Please sign in again to delete a location.");
-      return;
-    }
+  const handleDeleteStepLocal = async (stepId: string) => {
     if (!confirm("Are you sure you want to delete this location?")) return;
-    
     try {
-      await api.deleteStep(token, stepId);
-      
-      // Update local state
-      const updatedSteps = steps.filter(s => s.id !== stepId);
-      onStepsChange?.(updatedSteps);
+      await handleDeleteStep(stepId);
       setSelectedStep(null);
     } catch (err) {
       console.error("Failed to delete step:", err);
@@ -241,7 +220,7 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
 
             if (deleteBtn) {
               deleteBtn.addEventListener('click', () => {
-                handleDeleteStep(step.id);
+                handleDeleteStepLocal(step.id);
               }, { once: true });
             }
           });
@@ -346,7 +325,7 @@ function TripViewerLeafletComponent({ steps, onMapClick, onStepsChange, tripId, 
             setShowEditModal(false);
             setSelectedStep(null);
           }}
-          onSubmit={handleEditStep}
+          onSubmit={handleEditSubmit}
         />
       )}
       <div

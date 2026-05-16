@@ -33,7 +33,7 @@ function HomeContent() {
   const { handleLogout } = useAuth();
   const {
     trips, loading,
-    handleCreateTripFromToolbar, handleSelectTrip, handleDeleteTrip, handleSplitTrip,
+    handleCreateTrip, handleSelectTrip, handleDeleteTrip, handleSplitTrip,
   } = useTrips();
   const { currentTrip, steps, handleUpdateTrip } = useCurrentTrip();
   const { showStepModal, selectedMapCoords, handleCancelStep, handleAddStep } = useStepEditor();
@@ -71,7 +71,7 @@ function HomeContent() {
         trips={trips}
         currentTrip={currentTrip}
         onSelectTrip={handleSelectTrip}
-        onCreateTrip={handleCreateTripFromToolbar}
+        onCreateTrip={handleCreateTrip}
         onDeleteTrip={handleDeleteTrip}
         onUpdateTrip={handleUpdateTrip}
         onLogout={handleLogout}

@@ -35,8 +35,7 @@ export interface TripsContextValue {
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   newTripTitle: string;
   setNewTripTitle: React.Dispatch<React.SetStateAction<string>>;
-  handleCreateTrip: () => Promise<void>;
-  handleCreateTripFromToolbar: (title: string, description: string, startDate: string, endDate?: string) => Promise<void>;
+  handleCreateTrip: (title?: string, description?: string, startDate?: string, endDate?: string) => Promise<void>;
   handleSelectTrip: (trip: Trip) => Promise<void>;
   handleDeleteTrip: (tripId: string) => Promise<void>;
   handleSplitTrip: (newTripTitle: string, stepsToMove: Step[]) => Promise<void>;
@@ -49,6 +48,8 @@ export interface CurrentTripContextValue {
   setSteps: React.Dispatch<React.SetStateAction<Step[]>>;
   handleUpdateTrip: (updatedTrip: Trip) => void;
   handleStepsChange: (updatedSteps: Step[]) => void;
+  handleEditStep: (stepId: string, updates: Partial<Step>) => Promise<void>;
+  handleDeleteStep: (stepId: string) => Promise<void>;
 }
 
 export interface StepEditorContextValue {
@@ -198,34 +199,14 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
 
   // ── Trips callbacks ─────────────────────────────────────────────────────────
 
-  const handleCreateTrip = useCallback(async () => {
-    if (!newTripTitle.trim()) return;
-    const token = session.getToken();
-    if (!token) {
-      alert("No authentication token - please log in again");
-      return;
-    }
-    try {
-      const title = newTripTitle.trim();
-      const trip = await api.createTrip(token, title);
-      setTrips((prev) => [...prev, trip]);
-      setCurrentTrip(trip);
-      setSteps([]);
-      setNewTripTitle("");
-      const loc = await resolveLocation(title);
-      if (loc) setCenterLocation(loc);
-    } catch (err: any) {
-      console.error("Failed to create trip:", err);
-      alert(`Failed to create trip:\n${err.message || err.detail || JSON.stringify(err)}`);
-    }
-  }, [newTripTitle]);
-
-  const handleCreateTripFromToolbar = useCallback(async (
-    title: string,
-    description: string,
-    startDate: string,
-    endDate?: string
+  const handleCreateTrip = useCallback(async (
+    title?: string,
+    description?: string,
+    startDate?: string,
+    endDate?: string,
   ) => {
+    const resolvedTitle = (title ?? newTripTitle).trim();
+    if (!resolvedTitle) return;
     const token = session.getToken();
     if (!token) {
       alert("Please sign in to create a trip.");
@@ -233,17 +214,18 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const trip = await api.createTrip(token, title, description, startDate, endDate);
+      const trip = await api.createTrip(token, resolvedTitle, description, startDate, endDate);
       setTrips((prev) => [...prev, trip]);
       setCurrentTrip(trip);
       setSteps([]);
-      const loc = await resolveLocation(title);
+      if (!title) setNewTripTitle("");
+      const loc = await resolveLocation(resolvedTitle);
       if (loc) setCenterLocation(loc);
     } catch (err: any) {
       console.error("Failed to create trip:", err);
       throw err;
     }
-  }, []);
+  }, [newTripTitle]);
 
   const handleSelectTrip = useCallback(async (trip: Trip) => {
     setCurrentTrip(trip);
@@ -329,6 +311,24 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     setCurrentTrip((prev) => prev ? { ...prev, steps: updatedSteps } : prev);
   }, []);
 
+  const handleEditStep = useCallback(async (stepId: string, updates: Partial<Step>) => {
+    const token = session.getToken();
+    if (!token) throw new Error("Not authenticated");
+    await api.updateStep(token, stepId, updates);
+    const updatedSteps = steps.map((s) => s.id === stepId ? { ...s, ...updates } : s);
+    setSteps(updatedSteps);
+    setCurrentTrip((prev) => prev ? { ...prev, steps: updatedSteps } : prev);
+  }, [steps]);
+
+  const handleDeleteStep = useCallback(async (stepId: string) => {
+    const token = session.getToken();
+    if (!token) throw new Error("Not authenticated");
+    await api.deleteStep(token, stepId);
+    const updatedSteps = steps.filter((s) => s.id !== stepId);
+    setSteps(updatedSteps);
+    setCurrentTrip((prev) => prev ? { ...prev, steps: updatedSteps } : prev);
+  }, [steps]);
+
   // ── Step editor callbacks ───────────────────────────────────────────────────
 
   const handleMapClick = useCallback((coords: { lat: number; lng: number }) => {
@@ -387,12 +387,13 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
 
   const tripsValue = useMemo<TripsContextValue>(() => ({
     trips, setTrips, loading, setLoading, newTripTitle, setNewTripTitle,
-    handleCreateTrip, handleCreateTripFromToolbar, handleSelectTrip, handleDeleteTrip, handleSplitTrip,
-  }), [trips, loading, newTripTitle, handleCreateTrip, handleCreateTripFromToolbar, handleSelectTrip, handleDeleteTrip, handleSplitTrip]);
+    handleCreateTrip, handleSelectTrip, handleDeleteTrip, handleSplitTrip,
+  }), [trips, loading, newTripTitle, handleCreateTrip, handleSelectTrip, handleDeleteTrip, handleSplitTrip]);
 
   const currentTripValue = useMemo<CurrentTripContextValue>(() => ({
     currentTrip, setCurrentTrip, steps, setSteps, handleUpdateTrip, handleStepsChange,
-  }), [currentTrip, steps, handleUpdateTrip, handleStepsChange]);
+    handleEditStep, handleDeleteStep,
+  }), [currentTrip, steps, handleUpdateTrip, handleStepsChange, handleEditStep, handleDeleteStep]);
 
   const stepEditorValue = useMemo<StepEditorContextValue>(() => ({
     showStepModal, setShowStepModal, selectedMapCoords, setSelectedMapCoords,

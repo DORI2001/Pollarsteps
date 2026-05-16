@@ -100,7 +100,7 @@ export function WelcomeScreen() {
             placeholder="e.g., European Summer, Japan 2026"
             value={newTripTitle}
             onChange={(e) => setNewTripTitle(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleCreateTrip()}
+            onKeyPress={(e) => e.key === "Enter" && handleCreateTrip(newTripTitle)}
             style={{
               width: "100%", padding: "14px 16px", border: `1px solid ${COLORS.separator}`,
               borderRadius: 12, fontSize: 16, fontWeight: 400, boxSizing: "border-box",
@@ -117,7 +117,7 @@ export function WelcomeScreen() {
             }}
           />
           <button
-            onClick={handleCreateTrip}
+            onClick={() => handleCreateTrip(newTripTitle)}
             style={{
               width: "100%", padding: "14px 16px",
               background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`,

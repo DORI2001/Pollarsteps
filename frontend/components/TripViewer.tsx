@@ -18,7 +18,6 @@ type TripViewerProps = {
   onMapClick: (coords: { lat: number; lng: number }) => void;
   tripId?: string;
   token?: string;
-  onStepsChange?: (updatedSteps: Step[]) => void;
   fitTrigger?: number;
   centerLocation?: { lat: number; lng: number; zoom?: number } | null;
 };
@@ -26,7 +25,7 @@ type TripViewerProps = {
 // Leaflet depends on the browser `window`; load it client-side only
 const TripViewerLeaflet = dynamic(() => import("./TripViewerLeaflet"), { ssr: false });
 
-const TripViewerComponent: React.FC<TripViewerProps> = ({ steps, onMapClick, tripId, token, onStepsChange, fitTrigger, centerLocation }) => {
+const TripViewerComponent: React.FC<TripViewerProps> = ({ steps, onMapClick, tripId, token, fitTrigger, centerLocation }) => {
   const COLORS = useColors();
   return (
     <div
@@ -41,13 +40,12 @@ const TripViewerComponent: React.FC<TripViewerProps> = ({ steps, onMapClick, tri
       }}
     >
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      
+
       <TripViewerLeaflet
         steps={steps}
         onMapClick={onMapClick}
         tripId={tripId || ""}
         token={token || ""}
-        onStepsChange={onStepsChange}
         fitTrigger={fitTrigger}
         centerLocation={centerLocation}
       />

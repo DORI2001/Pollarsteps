@@ -8,8 +8,6 @@ import secrets
 import logging
 from app.models.trip import Trip
 from app.models.step import Step
-from app.models.user import User
-from app.models.collaborator import TripCollaborator, CollaboratorRole
 from app.schemas.trip import TripCreate, TripRead, TripUpdate
 from app.schemas.trip import TripWithSteps
 from app.schemas.step import StepRead
@@ -17,6 +15,12 @@ from app.utils.distance import calculate_total_distance
 from app.utils.errors import NotFoundError, ForbiddenError, AppException, check_ownership
 
 logger = logging.getLogger(__name__)
+
+
+def _enrich_trip(trip: Trip, steps: List[Step]) -> None:
+    """Attach computed statistics to a trip in-place."""
+    trip.total_distance = calculate_total_distance(steps)
+    trip.total_steps = len(steps)
 
 
 def _route_geojson(steps: List[Step]) -> Optional[dict]:
@@ -58,9 +62,8 @@ async def get_user_trips(user_id: UUID, session: AsyncSession, skip: int = 0, li
             select(Step).where(Step.trip_id == trip.id).order_by(Step.timestamp.asc())
         )
         steps = steps_result.scalars().all()
-        trip.total_distance = calculate_total_distance(steps)
-        trip.total_steps = len(steps)
-    
+        _enrich_trip(trip, steps)
+
     return trips
 
 
@@ -77,9 +80,8 @@ async def get_trip_with_steps(trip_id: UUID, session: AsyncSession) -> TripWithS
         select(Step).where(Step.trip_id == trip_id_str).options(selectinload(Step.images)).order_by(Step.timestamp.asc())
     )
     steps = result.scalars().all()
-    trip.total_distance = calculate_total_distance(steps)
-    trip.total_steps = len(steps)
-    
+    _enrich_trip(trip, steps)
+
     # Convert all data safely without triggering lazy loading
     step_reads = [StepRead.model_validate(s) for s in steps]
     geojson = _route_geojson(steps) if len(steps) >= 2 else None
@@ -219,20 +221,28 @@ async def split_trip(
         select(Step).where(Step.trip_id == trip_id_str).order_by(Step.timestamp.asc())
     )
     orig_steps = orig_steps_result.scalars().all()
-    original_trip.total_distance = calculate_total_distance(orig_steps)
-    original_trip.total_steps = len(orig_steps)
+    _enrich_trip(original_trip, orig_steps)
 
     new_steps_result = await session.execute(
         select(Step).where(Step.trip_id == new_trip.id).order_by(Step.timestamp.asc())
     )
     new_steps = new_steps_result.scalars().all()
-    new_trip.total_distance = calculate_total_distance(new_steps)
-    new_trip.total_steps = len(new_steps)
+    _enrich_trip(new_trip, new_steps)
 
     return original_trip, new_trip
 
 
 # ── Sharing ────────────────────────────────────────────────────────────────────
+
+async def get_trip_by_share_token(share_token: str, session: AsyncSession) -> Optional[TripWithSteps]:
+    """Return the public trip matching share_token, or None if not found/not public."""
+    result = await session.execute(
+        select(Trip).where(Trip.share_token == share_token, Trip.is_public == True)
+    )
+    trip = result.scalar_one_or_none()
+    if not trip:
+        return None
+    return await get_trip_with_steps(trip.id, session)
 
 async def generate_share_link(trip_id: str, owner_id: str, session: AsyncSession) -> dict:
     result = await session.execute(select(Trip).where(Trip.id == trip_id))
@@ -259,81 +269,3 @@ async def revoke_share_link(trip_id: str, owner_id: str, session: AsyncSession) 
     await session.commit()
 
 
-# ── Collaboration ──────────────────────────────────────────────────────────────
-
-class CollaboratorRecord:
-    def __init__(self, id, user_id, username, role):
-        self.id = id
-        self.user_id = user_id
-        self.username = username
-        self.role = role
-
-
-async def invite_collaborator(
-    trip_id: str, owner_id: str, username: str, role: CollaboratorRole, session: AsyncSession
-) -> CollaboratorRecord:
-    trip_result = await session.execute(select(Trip).where(Trip.id == trip_id))
-    trip = trip_result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != owner_id:
-        raise ForbiddenError("Only the trip owner can invite collaborators")
-
-    user_result = await session.execute(select(User).where(User.username == username))
-    invited_user = user_result.scalar_one_or_none()
-    if not invited_user:
-        raise NotFoundError(f"User '{username}'")
-    if invited_user.id == owner_id:
-        raise AppException(detail="Cannot invite yourself")
-
-    existing = await session.execute(
-        select(TripCollaborator).where(
-            TripCollaborator.trip_id == trip_id,
-            TripCollaborator.user_id == invited_user.id,
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise AppException(detail="User is already a collaborator", status_code=409)
-
-    collab = TripCollaborator(trip_id=trip_id, user_id=invited_user.id, role=role)
-    session.add(collab)
-    await session.commit()
-    await session.refresh(collab)
-    return CollaboratorRecord(id=collab.id, user_id=invited_user.id, username=invited_user.username, role=collab.role)
-
-
-async def list_collaborators(trip_id: str, owner_id: str, session: AsyncSession) -> list:
-    trip_result = await session.execute(select(Trip).where(Trip.id == trip_id))
-    trip = trip_result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != owner_id:
-        raise ForbiddenError()
-
-    result = await session.execute(
-        select(TripCollaborator, User)
-        .join(User, TripCollaborator.user_id == User.id)
-        .where(TripCollaborator.trip_id == trip_id)
-    )
-    return [CollaboratorRecord(id=c.id, user_id=c.user_id, username=u.username, role=c.role) for c, u in result.all()]
-
-
-async def remove_collaborator(trip_id: str, owner_id: str, user_id: str, session: AsyncSession) -> None:
-    trip_result = await session.execute(select(Trip).where(Trip.id == trip_id))
-    trip = trip_result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Trip")
-    if trip.user_id != owner_id:
-        raise ForbiddenError("Only the trip owner can remove collaborators")
-
-    result = await session.execute(
-        select(TripCollaborator).where(
-            TripCollaborator.trip_id == trip_id,
-            TripCollaborator.user_id == user_id,
-        )
-    )
-    collab = result.scalar_one_or_none()
-    if not collab:
-        raise NotFoundError("Collaborator")
-    await session.delete(collab)
-    await session.commit()

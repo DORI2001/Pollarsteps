@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from uuid import UUID
 from app.api.deps import get_db, get_current_user
 from app.schemas.trip import TripCreate, TripWithSteps, TripRead, TripUpdate, TripSplitRequest, TripSplitResponse
 from app.services import trips as trip_service
+from app.services import collaborators as collaborator_service
 from app.models.collaborator import CollaboratorRole
 from app.utils.errors import NotFoundError, AppException, check_ownership
 from pydantic import BaseModel as PydanticBaseModel
@@ -85,17 +85,9 @@ async def revoke_share_link(trip_id: UUID, session: AsyncSession = Depends(get_d
 
 @router.get("/shared/{share_token}", response_model=TripWithSteps)
 async def get_shared_trip(share_token: str, session: AsyncSession = Depends(get_db)):
-    from sqlalchemy import select as sa_select
-    from app.models.trip import Trip
-    result = await session.execute(
-        sa_select(Trip).where(Trip.share_token == share_token, Trip.is_public == True)
-    )
-    trip = result.scalar_one_or_none()
-    if not trip:
-        raise NotFoundError("Shared trip")
-    trip_data = await trip_service.get_trip_with_steps(trip.id, session)
+    trip_data = await trip_service.get_trip_by_share_token(share_token, session)
     if not trip_data:
-        raise NotFoundError("Trip")
+        raise NotFoundError("Shared trip")
     return trip_data
 
 
@@ -123,7 +115,7 @@ async def invite_collaborator(
     session: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    rec = await trip_service.invite_collaborator(str(trip_id), str(current_user.id), payload.username, payload.role, session)
+    rec = await collaborator_service.invite_collaborator(str(trip_id), str(current_user.id), payload.username, payload.role, session)
     return CollaboratorOut(id=rec.id, user_id=rec.user_id, username=rec.username, role=rec.role)
 
 
@@ -133,7 +125,7 @@ async def list_collaborators(
     session: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    recs = await trip_service.list_collaborators(str(trip_id), str(current_user.id), session)
+    recs = await collaborator_service.list_collaborators(str(trip_id), str(current_user.id), session)
     return [CollaboratorOut(id=r.id, user_id=r.user_id, username=r.username, role=r.role) for r in recs]
 
 
@@ -144,5 +136,4 @@ async def remove_collaborator(
     session: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    await trip_service.remove_collaborator(str(trip_id), str(current_user.id), str(user_id), session)
-    await session.commit()
+    await collaborator_service.remove_collaborator(str(trip_id), str(current_user.id), str(user_id), session)
