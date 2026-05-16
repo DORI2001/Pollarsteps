@@ -147,6 +147,7 @@ bash scripts/clean.sh    # Clean build artifacts
 - [Architecture](docs/ARCHITECTURE.md)
 - [API Reference](docs/API_REFERENCE.md)
 - [Developer Guide](docs/DEVELOPER_GUIDE.md)
+- [Testing & Deployment](docs/TESTING_DEPLOYMENT_GUIDE.md)
 
 ---
 
