@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { useColors } from "@/lib/theme";
+import { makeInputStyle } from "@/lib/inputStyle";
+import { extractApiError } from "@/lib/errors";
 import { ModalShell } from "./ModalShell";
 
 interface CreateTripModalProps {
@@ -16,22 +18,19 @@ export function CreateTripModal({ onClose, onCreate }: CreateTripModalProps) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "12px 14px", borderRadius: 12,
-    border: `1px solid ${COLORS.border}`, background: COLORS.inputBg,
-    color: COLORS.text, fontSize: 14, boxSizing: "border-box",
-    transition: "all 0.2s", opacity: saving ? 0.6 : 1,
-  };
+  const inputStyle = makeInputStyle(COLORS, saving);
 
   const handleSubmit = async () => {
-    if (!title.trim()) { alert("Please enter a trip title"); return; }
+    if (!title.trim()) { setError("Please enter a trip title"); return; }
     setSaving(true);
+    setError("");
     try {
       await onCreate(title, desc, startDate, endDate || undefined);
       onClose();
-    } catch {
-      alert("Failed to create trip. Please make sure you are signed in.");
+    } catch (err) {
+      setError(extractApiError(err, "Failed to create trip. Please make sure you are signed in."));
     } finally {
       setSaving(false);
     }
@@ -63,6 +62,12 @@ export function CreateTripModal({ onClose, onCreate }: CreateTripModalProps) {
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} disabled={saving} style={inputStyle} />
         </div>
       </div>
+
+      {error && (
+        <div style={{ padding: "10px 14px", borderRadius: 8, background: `${COLORS.error}15`, color: COLORS.error, fontSize: 13, marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 12 }}>
         <button onClick={onClose} disabled={saving}

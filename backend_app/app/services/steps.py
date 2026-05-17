@@ -10,6 +10,7 @@ from app.models.step import Step
 from app.models.step_image import StepImage
 from app.models.trip import Trip
 from app.schemas.step import StepCreate, StepRead, StepUpdate, StepImageRead
+from app.utils.errors import check_ownership, NotFoundError
 
 
 async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession, owner_id: Optional[str] = None) -> StepRead:
@@ -17,9 +18,9 @@ async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession, ow
     trip_id_str = str(trip_id)
     trip = await session.get(Trip, trip_id_str)
     if not trip:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-    if owner_id is not None and str(trip.user_id) != owner_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        raise NotFoundError("Trip")
+    if owner_id is not None:
+        check_ownership(trip.user_id, owner_id, "Trip")
 
     # Idempotent check by client_uuid
     existing = await session.execute(
@@ -99,8 +100,9 @@ async def update_step(step_id: UUID, payload: StepUpdate, session: AsyncSession,
     
     # Verify ownership through trip
     trip = await session.get(Trip, step.trip_id)
-    if not trip or trip.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if not trip:
+        raise NotFoundError("Trip")
+    check_ownership(trip.user_id, str(current_user.id), "Trip")
     
     # Update fields
     if payload.location_name is not None:
@@ -137,8 +139,9 @@ async def add_step_image(step_id: UUID, image_url: str, caption: Optional[str], 
     if not step:
         raise HTTPException(status_code=404, detail="Step not found")
     trip = await session.get(Trip, step.trip_id)
-    if not trip or str(trip.user_id) != owner_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    if not trip:
+        raise NotFoundError("Trip")
+    check_ownership(trip.user_id, owner_id, "Trip")
     result = await session.execute(
         select(StepImage).where(StepImage.step_id == str(step_id)).order_by(StepImage.order_index.desc())
     )
@@ -159,8 +162,9 @@ async def delete_step(step_id: UUID, session: AsyncSession, current_user) -> dic
     
     # Verify ownership through trip
     trip = await session.get(Trip, step.trip_id)
-    if not trip or str(trip.user_id) != str(current_user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if not trip:
+        raise NotFoundError("Trip")
+    check_ownership(trip.user_id, str(current_user.id), "Trip")
     
     await session.delete(step)
     await session.commit()

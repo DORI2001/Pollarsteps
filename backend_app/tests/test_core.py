@@ -7,20 +7,18 @@ from datetime import datetime, timezone
 class TestSecurity:
     """Test password hashing and JWT token functions"""
 
-    @pytest.mark.skip(reason="bcrypt version issue with passlib")
     def test_hash_password(self):
-        """Test password hashing"""
-        pass
+        hashed = hash_password("secret123")
+        assert hashed != "secret123"
+        assert hashed.startswith("$2")
 
-    @pytest.mark.skip(reason="bcrypt version issue with passlib")
     def test_verify_password_correct(self):
-        """Test password verification with correct password"""
-        pass
+        hashed = hash_password("correct")
+        assert verify_password("correct", hashed) is True
 
-    @pytest.mark.skip(reason="bcrypt version issue with passlib")
     def test_verify_password_incorrect(self):
-        """Test password verification with incorrect password"""
-        pass
+        hashed = hash_password("correct")
+        assert verify_password("wrong", hashed) is False
 
     def test_create_token(self):
         """Test JWT token creation"""

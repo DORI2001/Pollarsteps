@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useReelPlayback } from "@/hooks/useReelPlayback";
 import { useColors } from "@/lib/theme";
+import { radii } from "@/lib/design-tokens";
 import { ModalShell } from "@/components/modals/ModalShell";
 import { api, session as authSession } from "@/lib/api";
 import { Trip } from "@/lib/types";
@@ -597,7 +598,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
           style={{
             background: "rgba(255,255,255,0.2)",
             backdropFilter: "blur(10px)",
-            border: "none", borderRadius: 20,
+            border: "none", borderRadius: radii["3xl"],
             padding: "8px 14px", color: "white",
             fontSize: 13, fontWeight: 600, cursor: "pointer",
           }}
@@ -609,7 +610,7 @@ export function StoryReelModal({ trip, onClose }: StoryReelModalProps) {
           style={{
             background: "rgba(255,255,255,0.2)",
             backdropFilter: "blur(10px)",
-            border: "none", borderRadius: 20,
+            border: "none", borderRadius: radii["3xl"],
             width: 36, height: 36, color: "white",
             fontSize: 20, cursor: "pointer", lineHeight: 1,
           }}

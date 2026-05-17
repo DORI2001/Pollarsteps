@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useColors } from "@/lib/theme";
 import { resolveLocationName } from "@/lib/geocoding";
 import { compressImage } from "@/lib/images";
+import { extractApiError } from "@/lib/errors";
 import { ModalShell } from "@/components/modals/ModalShell";
 
 interface StepModalProps {
@@ -76,27 +77,8 @@ export function StepModal({ coords, onClose, onSubmit }: StepModalProps) {
       setImageUrl(null);
       setImageFile(null);
       onClose();
-    } catch (err: any) {
-      console.error("[StepModal] Caught error from onSubmit:", {
-        error: err,
-        message: err?.message,
-        detail: err?.detail,
-        code: err?.code,
-        status: err?.status,
-        toString: err?.toString()
-      });
-      
-      let message = "Failed to save memory. Please try again.";
-      if (err?.message) {
-        message = err.message;
-      } else if (err?.detail) {
-        message = err.detail;
-      } else if (typeof err === 'string') {
-        message = err;
-      }
-      
-      console.error("[StepModal] Display error:", message);
-      setError(message);
+    } catch (err) {
+      setError(extractApiError(err, "Failed to save memory. Please try again."));
     } finally {
       setLoading(false);
     }

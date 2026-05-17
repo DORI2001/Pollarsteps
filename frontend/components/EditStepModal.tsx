@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useColors } from "@/lib/theme";
+import { extractApiError } from "@/lib/errors";
 import { ModalShell } from "@/components/modals/ModalShell";
 
 interface EditStepModalProps {
@@ -28,8 +29,8 @@ export function EditStepModal({ step, onClose, onSubmit }: EditStepModalProps) {
         duration_days: durationDays > 0 ? durationDays : null,
       });
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Failed to update step");
+    } catch (err) {
+      setError(extractApiError(err, "Failed to update step"));
     } finally {
       setLoading(false);
     }

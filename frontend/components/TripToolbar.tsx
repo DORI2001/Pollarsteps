@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useSearch } from "@/hooks/useSearch";
 import { useColors } from "@/lib/theme";
+import { radii } from "@/lib/design-tokens";
 import { api, session as authSession } from "@/lib/api";
 import { Trip } from "@/lib/types";
 import { StoryReelModal } from "@/components/StoryReelModal";
@@ -91,7 +92,7 @@ export function TripToolbar({
 
   // Shared pill-button style factory
   const ghostBtn = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "8px 16px", borderRadius: 20, border: "none",
+    padding: "8px 16px", borderRadius: radii["3xl"], border: "none",
     background: "transparent", color: COLORS.text,
     cursor: "pointer", fontSize: 13, fontWeight: 500,
     transition: "all 0.2s ease-in-out", ...extra,
@@ -142,7 +143,7 @@ export function TripToolbar({
             </select>
 
             <button onClick={() => setActiveModal("create")}
-              style={{ padding: "9px 20px", borderRadius: 20, border: "none", background: COLORS.success, color: "white", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+              style={{ padding: "9px 20px", borderRadius: radii["3xl"], border: "none", background: COLORS.success, color: "white", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
               onMouseOver={(e) => { e.currentTarget.style.opacity = "0.85"; }}
               onMouseOut={(e) => { e.currentTarget.style.opacity = "1"; }}>
               + New Trip
@@ -162,7 +163,7 @@ export function TripToolbar({
 
             {currentTrip && (
               <button onClick={() => setActiveModal("reel")}
-                style={{ padding: "8px 16px", borderRadius: 20, border: "none", background: COLORS.secondary, color: "white", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+                style={{ padding: "8px 16px", borderRadius: radii["3xl"], border: "none", background: COLORS.secondary, color: "white", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
                 onMouseOver={(e) => { e.currentTarget.style.opacity = "0.9"; }}
                 onMouseOut={(e) => { e.currentTarget.style.opacity = "1"; }}>
                 🎬 Reel

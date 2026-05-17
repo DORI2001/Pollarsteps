@@ -289,3 +289,72 @@ async def test_remove_collaborator(client):
         headers={"Authorization": f"Bearer {token_owner}"},
     )
     assert r.status_code == 204
+
+
+# ── step ownership & validation ────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_step_in_other_users_trip_is_forbidden(client):
+    token_a, _ = await _register(client)
+    token_b, _ = await _register(client)
+    trip = await _create_trip(client, token_a)
+    r = await client.post("/api/steps/", json={
+        "trip_id": trip["id"], "lat": 1.0, "lng": 1.0, "client_uuid": str(uuid4()),
+    }, headers={"Authorization": f"Bearer {token_b}"})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_step_image_rejects_javascript_url(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    step = await _create_step(client, token, trip["id"])
+    r = await client.post(
+        f"/api/steps/{step['id']}/images",
+        params={"image_url": "javascript:alert(1)"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_step_image_rejects_data_url(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token)
+    step = await _create_step(client, token, trip["id"])
+    r = await client.post(
+        f"/api/steps/{step['id']}/images",
+        params={"image_url": "data:text/html,<script>alert(1)</script>"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_split_trip_moves_steps_to_new_trip(client):
+    token, _ = await _register(client)
+    trip = await _create_trip(client, token, "Original")
+    s1 = await _create_step(client, token, trip["id"], lat=1.0, lng=1.0)
+    s2 = await _create_step(client, token, trip["id"], lat=2.0, lng=2.0)
+    s3 = await _create_step(client, token, trip["id"], lat=3.0, lng=3.0)
+
+    r = await client.post(f"/api/trips/{trip['id']}/split", json={
+        "new_trip_title": "Split",
+        "step_ids": [s2["id"], s3["id"]],
+    }, headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    body = r.json()
+    new_trip_id = body["new_trip"]["id"]
+
+    orig_steps = await client.get(f"/api/steps/trip/{trip['id']}",
+                                  headers={"Authorization": f"Bearer {token}"})
+    new_steps = await client.get(f"/api/steps/trip/{new_trip_id}",
+                                 headers={"Authorization": f"Bearer {token}"})
+
+    original_step_ids = [s["id"] for s in orig_steps.json()["steps"]]
+    new_step_ids = [s["id"] for s in new_steps.json()["steps"]]
+
+    assert s1["id"] in original_step_ids
+    assert s2["id"] in new_step_ids
+    assert s3["id"] in new_step_ids
+    assert s2["id"] not in original_step_ids

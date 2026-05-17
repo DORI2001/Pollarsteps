@@ -1,6 +1,12 @@
 """Error handling utilities for consistent API responses."""
+import secrets
 from fastapi import HTTPException, status
 from typing import Optional
+
+
+def generate_share_token() -> str:
+    """Generate a cryptographically secure URL-safe share token (32 bytes)."""
+    return secrets.token_urlsafe(32)
 
 
 class AppException(HTTPException):

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useColors } from "@/lib/theme";
+import { radii } from "@/lib/design-tokens";
 import { TripViewer } from "@/components/TripViewer";
 import { session } from "@/lib/api";
 import { useCurrentTrip } from "@/hooks/useCurrentTrip";
@@ -42,7 +43,7 @@ export function MapSection() {
           position: "absolute", top: "50%", left: "50%",
           transform: "translate(-50%, -50%)", zIndex: 10,
           background: COLORS.cardBg, backdropFilter: "saturate(180%) blur(20px)",
-          borderRadius: 20, padding: "32px 40px", textAlign: "center",
+          borderRadius: radii["3xl"], padding: "32px 40px", textAlign: "center",
           boxShadow: `0 12px 40px ${COLORS.shadowHeavy}`,
           border: `1px solid ${COLORS.border}`, maxWidth: 320, pointerEvents: "none",
         }}>
@@ -60,7 +61,7 @@ export function MapSection() {
           position: "absolute", top: "50%", left: "50%",
           transform: "translate(-50%, -50%)", zIndex: 10,
           background: COLORS.cardBg, backdropFilter: "saturate(180%) blur(20px)",
-          borderRadius: 20, padding: "32px 40px", textAlign: "center",
+          borderRadius: radii["3xl"], padding: "32px 40px", textAlign: "center",
           boxShadow: `0 12px 40px ${COLORS.shadowHeavy}`,
           border: `1px solid ${COLORS.border}`, maxWidth: 320, pointerEvents: "none",
         }}>

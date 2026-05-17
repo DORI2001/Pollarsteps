@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import List, Optional
 from datetime import datetime
-import secrets
 import logging
 from app.models.trip import Trip
 from app.models.step import Step
@@ -12,7 +11,7 @@ from app.schemas.trip import TripCreate, TripRead, TripUpdate
 from app.schemas.trip import TripWithSteps
 from app.schemas.step import StepRead
 from app.utils.distance import calculate_total_distance
-from app.utils.errors import NotFoundError, ForbiddenError, AppException, check_ownership
+from app.utils.errors import NotFoundError, ForbiddenError, AppException, check_ownership, generate_share_token
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +250,7 @@ async def generate_share_link(trip_id: str, owner_id: str, session: AsyncSession
         raise NotFoundError("Trip")
     check_ownership(trip.user_id, owner_id)
     if not trip.share_token:
-        trip.share_token = secrets.token_urlsafe(32)
+        trip.share_token = generate_share_token()
         trip.is_public = True
         await session.commit()
         await session.refresh(trip)

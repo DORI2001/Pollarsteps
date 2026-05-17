@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useColors } from "@/lib/theme";
+import { radii } from "@/lib/design-tokens";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrips } from "@/hooks/useTrips";
 
@@ -141,7 +142,7 @@ export function WelcomeScreen() {
 
         {/* Info Card */}
         <div style={{
-          padding: 28, background: COLORS.surfaceElevated, borderRadius: 20,
+          padding: 28, background: COLORS.surfaceElevated, borderRadius: radii["3xl"],
           textAlign: "center", boxShadow: `0 4px 12px ${COLORS.shadowColor}`,
           borderTop: `1px solid ${COLORS.separator}`,
         }} className="info-card">

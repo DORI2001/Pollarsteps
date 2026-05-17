@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { useColors } from "@/lib/theme";
+import { radii } from "@/lib/design-tokens";
 import { Trip, Step } from "@/lib/types";
 import { useCurrentTrip } from "@/hooks/useCurrentTrip";
 import { useTripUI } from "@/hooks/useTripUI";
@@ -133,7 +134,7 @@ export function StatsPanel() {
         position: "fixed",
         top: 90, right: 16, left: "auto", bottom: 24,
         width: 380, maxWidth: "calc(100vw - 48px)",
-        background: COLORS.cardBg, borderRadius: 20, padding: 24,
+        background: COLORS.cardBg, borderRadius: radii["3xl"], padding: 24,
         boxShadow: `0 12px 40px ${COLORS.shadowHeavy}`,
         backdropFilter: "saturate(180%) blur(20px)",
         zIndex: 70, pointerEvents: "auto",

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useColors } from "@/lib/theme";
+import { makeInputStyle } from "@/lib/inputStyle";
 import { ModalShell } from "./ModalShell";
 import { api, session as authSession } from "@/lib/api";
 
@@ -16,11 +17,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "12px 14px", borderRadius: 12,
-    border: `1px solid ${COLORS.border}`, background: COLORS.inputBg,
-    color: COLORS.text, fontSize: 14, boxSizing: "border-box",
-  };
+  const inputStyle = makeInputStyle(COLORS, saving);
 
   const handleChangePassword = async () => {
     if (!currentPw || !newPw) { setMsg("Both fields are required"); return; }

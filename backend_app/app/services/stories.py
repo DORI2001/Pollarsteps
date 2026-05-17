@@ -1,6 +1,5 @@
 from typing import List
 from uuid import UUID
-import secrets
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
@@ -9,6 +8,7 @@ from app.models.trip import Trip
 from app.models.step import Step
 from app.models.story import Story, StorySlide
 from app.schemas.story import StoryCreate
+from app.utils.errors import check_ownership, NotFoundError, generate_share_token
 from sqlalchemy.orm import attributes
 
 
@@ -22,9 +22,8 @@ def _select_highlight_steps(steps: List[Step], max_slides: int) -> List[Step]:
 async def generate_story(payload: StoryCreate, session: AsyncSession, current_user) -> Story:
     trip = await session.get(Trip, str(payload.trip_id))
     if not trip:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-    if trip.user_id != str(current_user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        raise NotFoundError("Trip")
+    check_ownership(trip.user_id, str(current_user.id), "Trip")
 
     result = await session.execute(
         select(Step).where(Step.trip_id == trip.id).order_by(Step.timestamp.asc())
@@ -37,7 +36,7 @@ async def generate_story(payload: StoryCreate, session: AsyncSession, current_us
         trip_id=trip.id,
         status="ready",
         is_public=payload.shareable,
-        share_token=secrets.token_urlsafe(16) if payload.shareable else None,
+        share_token=generate_share_token() if payload.shareable else None,
         song_provider=payload.song_provider,
         song_id=payload.song_id,
         song_title=payload.song_title,
@@ -79,8 +78,9 @@ async def get_story(story_id: UUID, session: AsyncSession, current_user) -> Stor
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story not found")
 
     trip = await session.get(Trip, story.trip_id)
-    if not trip or trip.user_id != str(current_user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if not trip:
+        raise NotFoundError("Trip")
+    check_ownership(trip.user_id, str(current_user.id), "Trip")
 
     slides_result = await session.execute(
         select(StorySlide).where(StorySlide.story_id == story.id).order_by(StorySlide.order_index.asc())

@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { useColors } from "@/lib/theme";
+import { makeInputStyle } from "@/lib/inputStyle";
+import { extractApiError } from "@/lib/errors";
 import { ModalShell } from "./ModalShell";
 import { Trip } from "@/lib/types";
 
@@ -18,20 +20,18 @@ export function EditTripModal({ trip, onClose, onSave }: EditTripModalProps) {
   const [startDate, setStartDate] = useState(trip.start_date || "");
   const [endDate, setEndDate] = useState(trip.end_date || "");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "12px 14px", borderRadius: 12,
-    border: `1px solid ${COLORS.border}`, background: COLORS.inputBg,
-    color: COLORS.text, fontSize: 14, boxSizing: "border-box",
-  };
+  const inputStyle = makeInputStyle(COLORS, saving);
 
   const handleSave = async () => {
     setSaving(true);
+    setError("");
     try {
       onSave({ ...trip, title, description: desc, start_date: startDate || undefined, end_date: endDate || undefined });
       onClose();
-    } catch {
-      alert("Failed to update trip");
+    } catch (err) {
+      setError(extractApiError(err, "Failed to update trip"));
     } finally {
       setSaving(false);
     }
@@ -63,6 +63,12 @@ export function EditTripModal({ trip, onClose, onSave }: EditTripModalProps) {
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
         </div>
       </div>
+
+      {error && (
+        <div style={{ padding: "10px 14px", borderRadius: 8, background: `${COLORS.error}15`, color: COLORS.error, fontSize: 13, marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 12 }}>
         <button onClick={onClose} disabled={saving}
