@@ -5,7 +5,7 @@ import httpx
 
 from app.api.deps import get_db, get_current_user
 from app.services.trips import get_trip_with_steps
-from app.utils.errors import NotFoundError, ForbiddenError
+from app.utils.errors import NotFoundError, ForbiddenError, check_ownership
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -47,8 +47,7 @@ async def _get_owned_trip(trip_id: UUID, current_user, session: AsyncSession):
     trip = await get_trip_with_steps(trip_id, session)
     if not trip:
         raise NotFoundError("Trip")
-    if trip.user_id != current_user.id:
-        raise ForbiddenError()
+    check_ownership(trip.user_id, str(current_user.id))
     return trip
 
 
