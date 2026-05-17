@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useEf
 import { useRouter } from "next/navigation";
 import { session, api } from "@/lib/api";
 import { resolveLocation } from "@/lib/geocoding";
-import { Trip, Step, User } from "@/lib/types";
+import { Trip, Step, User, RecommendationLocation } from "@/lib/types";
 
 // ─── Shared types ────────────────────────────────────────────────────────────
 
@@ -12,12 +12,6 @@ interface CenterLocation {
   lat: number;
   lng: number;
   zoom?: number;
-}
-
-interface RecommendationLocation {
-  name: string;
-  lat: number;
-  lng: number;
 }
 
 // ─── Context value shapes ─────────────────────────────────────────────────────

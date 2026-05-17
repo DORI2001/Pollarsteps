@@ -38,13 +38,21 @@ export function TripToolbar({
 
   const close = () => setActiveModal(null);
 
-  const handleShare = async () => {
-    if (!currentTrip) return;
+  // Returns [token, tripId] or null if either is missing — centralises the
+  // repeated "get token + guard currentTrip" pattern across all toolbar actions.
+  const getAuth = (): [string, string] | null => {
     const token = authSession.getToken();
-    if (!token) return;
+    if (!token || !currentTrip) return null;
+    return [token, currentTrip.id];
+  };
+
+  const handleShare = async () => {
+    const auth = getAuth();
+    if (!auth) return;
+    const [token, tripId] = auth;
     setShareLoading(true);
     try {
-      const result = await api.shareTrip(token, currentTrip.id);
+      const result = await api.shareTrip(token, tripId);
       setShareLink(`${window.location.origin}/shared/${result.share_token}`);
       setActiveModal("share");
     } catch {
@@ -55,18 +63,18 @@ export function TripToolbar({
   };
 
   const handleRevokeShare = async () => {
-    if (!currentTrip) return;
-    const token = authSession.getToken();
-    if (!token) return;
-    await api.revokeShareLink(token, currentTrip.id);
+    const auth = getAuth();
+    if (!auth) return;
+    const [token, tripId] = auth;
+    await api.revokeShareLink(token, tripId);
     setShareLink("");
   };
 
   const handleEditSave = async (updated: Trip) => {
-    if (!currentTrip) return;
-    const token = authSession.getToken();
-    if (!token) return;
-    const result = await api.updateTrip(token, currentTrip.id, {
+    const auth = getAuth();
+    if (!auth) return;
+    const [token, tripId] = auth;
+    const result = await api.updateTrip(token, tripId, {
       title: updated.title?.trim() || undefined,
       description: updated.description?.trim() || undefined,
       start_date: updated.start_date || undefined,

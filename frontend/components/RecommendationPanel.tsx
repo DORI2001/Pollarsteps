@@ -3,10 +3,10 @@
 import React, { useState } from "react";
 import { api } from "@/lib/api";
 import { useColors } from "@/lib/theme";
-import { LocationRecommendations } from "@/lib/types";
+import { LocationRecommendations, RecommendationLocation } from "@/lib/types";
 
 interface RecommendationPanelProps {
-  currentLocation?: { name: string; lat: number; lng: number };
+  currentLocation?: RecommendationLocation;
   onClose: () => void;
 }
 

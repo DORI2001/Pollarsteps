@@ -128,3 +128,9 @@ export type MapClickEvent = {
   lng: number;
   timestamp: string;
 };
+
+export interface RecommendationLocation {
+  name: string;
+  lat: number;
+  lng: number;
+}
