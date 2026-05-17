@@ -33,10 +33,19 @@ auth_limiter = RateLimiter(max_calls=10, window_seconds=60)
 
 
 def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    # Only trust X-Forwarded-For when the direct peer is a private/loopback address
+    # (i.e. the app is sitting behind a reverse proxy on the same host or LAN).
+    # Without this guard, any client can spoof an arbitrary IP to bypass rate limiting.
+    direct_host = request.client.host if request.client else ""
+    _private_prefixes = ("127.", "10.", "172.", "192.168.", "::1", "")
+    behind_proxy = any(direct_host.startswith(p) for p in _private_prefixes)
+
+    if behind_proxy:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+
+    return direct_host or "unknown"
 
 
 def check_recommendations_limit(request: Request):

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import urlparse
 from uuid import UUID
 from app.api.deps import get_db, get_current_user
 from app.schemas.step import StepCreate, StepRead, StepUpdate, StepImageRead
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/steps", tags=["steps"])
 
 @router.post("/", response_model=StepRead, status_code=status.HTTP_201_CREATED)
 async def create_step(payload: StepCreate, session: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
-    return await add_step(payload.trip_id, payload, session)
+    return await add_step(payload.trip_id, payload, session, owner_id=str(current_user.id))
 
 
 @router.put("/{step_id}", response_model=StepRead)
@@ -43,4 +44,7 @@ async def add_step_image_endpoint(
     session: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    parsed = urlparse(image_url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="image_url must use http or https")
     return await add_step_image(step_id, image_url, caption, str(current_user.id), session)

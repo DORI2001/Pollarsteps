@@ -277,18 +277,21 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
 
   const handleSplitTrip = useCallback(async (newTitle: string, stepsToMove: Step[]) => {
     const token = session.getToken();
-    setCurrentTrip((prevTrip) => {
-      if (!token || !prevTrip) return prevTrip;
-      const stepIds = stepsToMove.map((s) => s.id);
-      api.splitTrip(token, prevTrip.id, newTitle, stepIds).then(async (result) => {
-        const updatedTrips = await api.getTrips(token);
-        setTrips(updatedTrips);
-        const originalSteps = await api.getSteps(token, result.original_trip.id);
-        setSteps(originalSteps);
-        setCurrentTrip({ ...result.original_trip, steps: originalSteps });
-      });
-      return prevTrip;
-    });
+    if (!token || !currentTripRef.current) return;
+    const tripId = currentTripRef.current.id;
+    const stepIds = stepsToMove.map((s) => s.id);
+    try {
+      const result = await api.splitTrip(token, tripId, newTitle, stepIds);
+      const updatedTrips = await api.getTrips(token);
+      setTrips(updatedTrips);
+      const originalSteps = await api.getSteps(token, result.original_trip.id);
+      setSteps(originalSteps);
+      setCurrentTrip({ ...result.original_trip, steps: originalSteps });
+    } catch (err: any) {
+      console.error("Split failed:", err);
+      alert(`Split failed: ${err?.message || "Unknown error"}`);
+      throw err;
+    }
   }, []);
 
   // ── Current trip callbacks ──────────────────────────────────────────────────

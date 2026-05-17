@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from app.models.step import Step
 from app.models.step_image import StepImage
@@ -11,12 +12,14 @@ from app.models.trip import Trip
 from app.schemas.step import StepCreate, StepRead, StepUpdate, StepImageRead
 
 
-async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession) -> StepRead:
+async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession, owner_id: Optional[str] = None) -> StepRead:
     # Convert UUID to string for SQLite compatibility
     trip_id_str = str(trip_id)
     trip = await session.get(Trip, trip_id_str)
     if not trip:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+    if owner_id is not None and str(trip.user_id) != owner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     # Idempotent check by client_uuid
     existing = await session.execute(
@@ -56,7 +59,19 @@ async def add_step(trip_id: UUID, payload: StepCreate, session: AsyncSession) ->
         duration_days=payload.duration_days,
     )
     session.add(step)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        # Concurrent insert with same client_uuid — re-fetch and return the winner
+        existing = await session.execute(
+            select(Step).where(Step.trip_id == trip_id_str, Step.client_uuid == str(payload.client_uuid))
+            .options(selectinload(Step.images))
+        )
+        step = existing.scalar_one_or_none()
+        if step:
+            return StepRead.model_validate(step)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Step already exists")
     await session.refresh(step)
     # New step always has zero images — build read model directly to avoid lazy-load
     from app.schemas.step import StepImageRead
